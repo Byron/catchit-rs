@@ -19,7 +19,9 @@ name = "catchit"
 
 # NOTE: these dependencies are only needed by the executable, the library doesn't need anything
 [dependencies]
-piston = "0.2.2"
+vecmath = "*"
+rand = "*"
+piston = "*"
 piston2d-graphics = "*"
 pistoncore-glutin_window = "*"
 piston2d-opengl_graphics = "*"

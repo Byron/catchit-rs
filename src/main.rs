@@ -5,15 +5,21 @@ extern crate opengl_graphics;
 
 extern crate catchit;
 
+use catchit::{Engine, Scalar};
+
 use piston::window::WindowSettings;
 use piston::event::*;
 use glutin_window::GlutinWindow as Window;
 use opengl_graphics::{ GlGraphics, OpenGL };
 
 pub struct App {
-    gl: GlGraphics, // OpenGL drawing backend.
-    rotation: f64   // Rotation for the square.
+    gl: GlGraphics,
+    rotation: f64, 
+    engine: Engine,
 }
+
+const WIDTH: u16 = 1024;
+const HEIGHT: u16 = 768;
 
 impl App {
     fn render(&mut self, args: &RenderArgs) {
@@ -50,7 +56,7 @@ fn main() {
     let window = Window::new(
         WindowSettings::new(
             "catchit",
-            [200, 200]
+            [WIDTH as u32, HEIGHT as u32]
         )
         .exit_on_esc(true)
         .vsync(true)
@@ -60,8 +66,12 @@ fn main() {
     // Create a new game and run it.
     let mut app = App {
         gl: GlGraphics::new(OpenGL::_3_2),
-        rotation: 0.0
+        rotation: 0.0,
+        engine: Engine::from_field([WIDTH as Scalar, HEIGHT as Scalar]),
     };
+
+    let mut tries = 0u32;
+    let mut max_score = 0u32;
 
     for e in window.events() {
         if let Some(r) = e.render_args() {
