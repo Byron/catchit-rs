@@ -2,9 +2,9 @@ language: rust
 rust:
 - stable
 before_install:
-    - sudo apt-get update -qq
+- sudo apt-get update -qq
 install:
-    - sudo apt-get install libfreetype6-dev libXxf86vm-dev
+- sudo apt-get install libfreetype6-dev libXxf86vm-dev
 before_script:
 - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
 script:
@@ -13,3 +13,6 @@ script:
 - travis-cargo doc
 after_success:
 - travis-cargo doc-upload
+env:
+  global:
+    secure: piXJxBIEV3fkqo1ZK/F63J/0amF/kO9iDCNvT8wd22hDzSHwLCje/T1QJwU5Z4vEULSnE27Fk3jkPjnfT1LkxlncPhcpqD6dqfLe/+D7q+j8AzcVOMIDgQTIXvQN1wRg9ujc7vtdFNmEtDzxDZDS+TCcznyWL1a4i1irwJKXai9KMJf+XvSz1f5V4f8K+UI+ED+FB2xV+7+hsYkI48xkGUFkYOKug53OtelwEjktzD4yx+aZff4HXR09T8kf9Riu54VL6E55frx1czGUEOLFGnc+vG6Y/5nzXwxucssfTJqDDKFIHmgTWJ17TyKRmKc8qG/txqIN6uRhZUMMXX76M752P0f5MGdvar3nbJ+c911q4BSvhI2Hr7B6sC4ESvjwO8HEq5jK1+K1CMKosxeSJdscfs2KL7Skv+LcnHo+1mZHrNUGm3sM+Rv93OCmmXAc6151slk3pIvOUQHyIScE5QwzGUiqxUzoWBa+jRz7juPCCfqiG9Qaa2xyu7ocNpAtxEWlUlDku8aMhgOvaXgGi9zrFXOSrB9jxulGyOJjUQhtI8XIJUFAg8d1pRinJw2DTgi2zJl4SC9W4yF1DKzp1UiFRFnQhQmLU8MeGWlrW1GpTKGwqBzLIDQFzMqlIk21zz1gOI+FJgx5mvrXnb+izhka4Bq0YIsxkptOPYXs07k=
