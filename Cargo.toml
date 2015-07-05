@@ -1,0 +1,23 @@
+[package]
+
+name = "catchit"
+version = "0.0.1"
+authors = ["Sebastian Thiel <byronimo@gmail.com>"]
+license = "MIT"
+description = "A tiny, but addictive game"
+repository = "https://github.com/Byron/catchit-rs"
+keywords = ["game", "addictive", "piston", "fun"]
+documentation = "http://byron.github.io/catchit-rs"
+
+[[bin]]
+name = "catchit"
+
+[lib]
+name = "catchit"
+
+# NOTE: these dependencies are only needed by the executable, the library doesn't need anything
+[dependencies]
+piston = "0.2.2"
+piston2d-graphics = "*"
+pistoncore-glutin_window = "*"
+piston2d-opengl_graphics = "*"
