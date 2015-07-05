@@ -12,6 +12,7 @@ documentation = "http://byron.github.io/catchit-rs"
 [[bin]]
 name = "catchit"
 test = false
+doc = false
 
 [lib]
 name = "catchit"
