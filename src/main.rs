@@ -10,8 +10,8 @@ use catchit::Scalar as CatchitScalar;
 
 use piston::window::WindowSettings;
 use piston::event::{ RenderArgs, UpdateArgs, Events, RenderEvent, UpdateEvent, MouseCursorEvent,
-                     EventLoop, PressEvent };
-use piston::input::{Button, Key};
+                     EventLoop, PressEvent, ReleaseEvent };
+use piston::input::{Button, Key, MouseButton};
 use glutin_window::GlutinWindow as Window;
 use opengl_graphics::{ GlGraphics, OpenGL };
 use opengl_graphics::glyph_cache::GlyphCache;
@@ -31,7 +31,7 @@ pub struct App {
 
 const WIDTH: u16 = 1024;
 const HEIGHT: u16 = 768;
-const UPDATES_PER_SECOND: u64 = 60;
+const UPDATES_PER_SECOND: u64 = 30;
 const FONT_SIZE: u32 = 22;
 const HUD_SPACE: Scalar = 1.0 / 8.0;
 const NEW_GAME_TEXT: &'static str = "Press SPACE for new game";
@@ -48,13 +48,13 @@ impl App {
 
         let square = rectangle::square(0.0, 0.0, 1.0);
         let s = self.engine.state();
+        let game_over = self.game_over();
         let font_fira_bold = &mut self.font_fira_bold;
         let text_height = self.text_height;
         let max_score = self.max_score;
         let tries = self.tries;
         let field_border_y = self.field_border_y;
         let last_state = &self.last_state;
-
 
         self.gl.draw(args.viewport(), |c, gl| {
             let draw_object = |obj: &Object, gl: &mut GlGraphics, color: [f32; 4]| {
@@ -92,7 +92,7 @@ impl App {
                 }
 
                 draw_object(&s.prey, gl, RED);
-                draw_object(&s.hunter, gl, RED);
+                draw_object(&s.hunter.object, gl, RED);
 
                 text.draw(&format!("Score: {}", s.score), font_fira_bold, 
                                                           &c.draw_state,
@@ -101,11 +101,17 @@ impl App {
                                                           gl);
             }
 
-            if last_state.is_some() {
+            if game_over {
                 let w = text_width(font_fira_bold, NEW_GAME_TEXT) / 2.0;
                 text.draw(NEW_GAME_TEXT, font_fira_bold, &c.draw_state,
                                           c.transform.trans(WIDTH as Scalar / 2.0 - w,
                                                            HEIGHT as Scalar / 2.0),
+                                          gl);
+                text.draw("Use LMB for repelling force", font_fira_bold, &c.draw_state,
+                                          c.transform.trans(WIDTH as Scalar / 2.0 - w,
+                                                           HEIGHT as Scalar / 2.0 
+                                                           + text_height 
+                                                           + text_height * 0.4),
                                           gl);
             }
 
@@ -129,6 +135,10 @@ impl App {
                                                                      * HUD_SPACE * 3.0),
                                                          gl);
         });
+    }
+
+    fn game_over(&self) -> bool {
+        self.last_state.is_some()
     }
 
     fn update(&mut self, args: &UpdateArgs) {
@@ -164,7 +174,7 @@ fn main() {
         )
         .exit_on_esc(true)
         .vsync(true)
-        .samples(4)
+        .samples(1)
     );
 
     let mut app = {
@@ -195,9 +205,19 @@ fn main() {
             app.engine.set_hunter_pos(pos);
         }
 
-        if let Some(Button::Keyboard(Key::Space)) = e.press_args() {
-            app.last_state = None;
-            app.engine.reset(compute_field(WIDTH, HEIGHT, app.text_height));
+        match e.press_args() {
+            Some(Button::Keyboard(Key::Space)) if app.game_over() => {
+                app.last_state = None;
+                app.engine.reset(compute_field(WIDTH, HEIGHT, app.text_height))
+            },
+            Some(Button::Mouse(MouseButton::Left)) => {
+                app.engine.set_hunter_force(true);
+            }
+            _ => {},
+        }
+
+        if let Some(Button::Mouse(MouseButton::Left)) = e.release_args() {
+            app.engine.set_hunter_force(false);
         }
 
         if let Some(r) = e.render_args() {

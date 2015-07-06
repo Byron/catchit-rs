@@ -12,6 +12,9 @@ pub const OBSTACLE_SIZE_COEFF: Scalar = 0.3;
 pub const MIN_OBSTACLE_TO_HUNTER_COEFF: Scalar = 0.1;
 pub const TRANSITION_DURATION: Scalar =  0.5;
 pub const HOLD_INVISIBILITY_DURATION: Scalar = 0.5;
+pub const SPECIAL_OBSTACLE_PROBABILITY: f32 = 0.9;
+pub const HUNTER_FORCE: Scalar = 1.0;
+pub const HUNTER_FORCE_SIZE_COEFF: Scalar = 1.5;
 
 pub type Scalar = f64;
 
@@ -92,6 +95,12 @@ pub struct Obstacle {
     pub velocity: Velocity
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct Hunter {
+    pub object: Object,
+    pub force: Scalar
+}
+
 /// It maintains the state of the game and expects to be updated with 
 /// time-delta information to compute the next state.
 ///
@@ -102,7 +111,7 @@ pub struct State {
     /// The playing field
     pub field: Extent,
     /// The player's character
-    pub hunter: Object,
+    pub hunter: Hunter,
     /// Hunted the player's character
     pub prey: Object,
     /// Obstacles the hunter must avoid to prevent game-over
@@ -273,10 +282,13 @@ impl Engine {
 
         State {
             field: field,
-            hunter: Object {
-                pos: [-half_size * 2.0, -half_size * 2.0],
-                half_size: half_size,
-                shape: CollisionShape::Circle
+            hunter: Hunter {
+                object: Object {
+                    pos: [-half_size * 2.0, -half_size * 2.0],
+                    half_size: half_size,
+                    shape: CollisionShape::Circle
+                },
+                force: 0.0
             },
             prey: Object {
                 pos: prey_pos,
@@ -299,9 +311,9 @@ impl Engine {
     fn new_obstacle(rng: &mut rand::XorShiftRng, s: &mut State, min_distance: Scalar) {
         s.prey.pos = Self::rnd_obj_pos_in_field(&s.field, s.prey.half_size, rng);
 
-        let mut half_size = s.hunter.half_size * OBSTACLE_SIZE_COEFF;
+        let mut half_size = s.hunter.object.half_size * OBSTACLE_SIZE_COEFF;
         let kind = match rng.gen_range(0.0f32, 1.0) {
-            _p if _p > 0.5 => {
+            _p if _p > SPECIAL_OBSTACLE_PROBABILITY => {
                 half_size *= 2.0;
                 ObstacleKind::InvisibiltySwitch
             },
@@ -314,8 +326,8 @@ impl Engine {
                            s.field[1] * FIELD_VELOCITY_COEFF),
         ];
 
-        let mut pos = s.hunter.pos;
-        while vec2_len(vec2_sub(pos, s.hunter.pos)) < min_distance {
+        let mut pos = s.hunter.object.pos;
+        while vec2_len(vec2_sub(pos, s.hunter.object.pos)) < min_distance {
             pos = Self::rnd_obj_pos_in_field(&s.field, s.prey.half_size, rng)
         }
         s.obstacles.push(Obstacle {
@@ -334,7 +346,23 @@ impl Engine {
         for obstacle in s.obstacles.iter_mut() {
 
             let obj = &mut obstacle.object;
-            obj.pos = vec2_add(obj.pos, vec2_scale(obstacle.velocity, dt));
+
+
+            let repell_velocity = 
+                if s.hunter.force > 0.0 {
+                    let vel = vec2_sub(obj.pos, s.hunter.object.pos);
+                    let velocity_scale = vec2_len(vel) / (s.hunter.object.half_size * 2.0 * 4.0);
+
+                    if velocity_scale <= 1.0 {
+                        vec2_scale(vel, (1.0 - velocity_scale) * s.hunter.force * 0.1)
+                    } else {
+                        [0.0, 0.0]
+                    }
+                } else {
+                    [0.0, 0.0]
+                };
+            obstacle.velocity = vec2_add(obstacle.velocity, repell_velocity);
+            obj.pos = vec2_add(obj.pos, vec2_scale(obstacle.velocity , dt));
 
             if obj.left() <= 0.0 {
                 obstacle.velocity[0] = -obstacle.velocity[0];
@@ -378,7 +406,7 @@ impl Engine {
     pub fn update(&mut self, dt: f64) -> Result<(), State> {
         let mut is_game_over = false;
         if let Some(ref mut s) = self.state {
-            if s.hunter.intersects(&s.prey) {
+            if s.hunter.object.intersects(&s.prey) {
                 s.score += 10;
                 Self::new_obstacle(&mut self.rng.borrow_mut(), s, self.min_distance);
             }// check hunter-prey intersection
@@ -386,7 +414,8 @@ impl Engine {
             Self::advect_obstacles(s, dt);
 
             // advance transitions
-            for t in [&mut s.obstacle_opacity].iter_mut() {
+            {
+                let t = &mut s.obstacle_opacity;
                 match t.state() {
                     TransitionState::Start => {
                         if t.direction == TransitionDirection::ToFrom {
@@ -413,7 +442,7 @@ impl Engine {
 
             // Handle obstacle hits
             for obstacle in &s.obstacles {
-                if obstacle.object.intersects(&s.hunter) {
+                if obstacle.object.intersects(&s.hunter.object) {
                     match obstacle.kind {
                         ObstacleKind::Deadly => {
                             is_game_over = true;
@@ -444,7 +473,21 @@ impl Engine {
     /// Position will be clamped into the playing field
     pub fn set_hunter_pos(&mut self, pos: Position) {
         if let Some(ref mut s) = self.state {
-            s.hunter.pos = pos;
+            s.hunter.object.pos = pos;
+        }
+    }
+
+    /// If enabled, a forcefield is created around the hunter, usually repelling
+    /// spheres.
+    pub fn set_hunter_force(&mut self, enabled: bool) {
+        if let Some(ref mut s) = self.state {
+            if enabled {
+                s.hunter.force += HUNTER_FORCE;
+                s.hunter.object.half_size *= HUNTER_FORCE_SIZE_COEFF;
+            } else {
+                s.hunter.force -= HUNTER_FORCE;
+                s.hunter.object.half_size *= 1.0 / HUNTER_FORCE_SIZE_COEFF;
+            }
         }
     }
 }
