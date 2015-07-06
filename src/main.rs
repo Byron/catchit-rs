@@ -5,7 +5,7 @@ extern crate opengl_graphics;
 
 extern crate catchit;
 
-use catchit::{Engine, Object, CollisionShape, ObstacleKind};
+use catchit::{Engine, Object, CollisionShape, ObstacleKind, State};
 use catchit::Scalar as CatchitScalar;
 
 use piston::window::WindowSettings;
@@ -20,6 +20,7 @@ use graphics::math::Scalar;
 pub struct App {
     gl: GlGraphics,
     engine: Engine,
+    last_state: Option<State>,
     field_border_y: Scalar,
     max_score: u32,
     text_height: f64,
@@ -50,13 +51,14 @@ impl App {
         let max_score = self.max_score;
         let tries = self.tries;
         let field_border_y = self.field_border_y;
+        let last_state = &self.last_state;
 
 
         self.gl.draw(args.viewport(), |c, gl| {
             let draw_object = |obj: &Object, gl: &mut GlGraphics, color: [f32; 4]| {
-                let transform = c.transform.trans(obj.pos[0] - obj.size / 2.0, 
-                                                  obj.pos[1] - obj.size / 2.0)
-                                           .scale(obj.size, obj.size);
+                let transform = c.transform.trans(obj.pos[0] - obj.half_size, 
+                                                  obj.pos[1] - obj.half_size)
+                                           .scale(obj.half_size * 2.0, obj.half_size * 2.0);
                 match obj.shape {
                     CollisionShape::Square => rectangle(color, square, transform, gl),
                     CollisionShape::Circle => ellipse(color, square, transform, gl),
@@ -69,7 +71,7 @@ impl App {
                 c.transform.trans(x, HEIGHT as Scalar - text_height / 2.0)
             };
 
-            if let &Some(ref s) = s {
+            if let Some(ref s) = s.as_ref().or(last_state.as_ref()) {
                 for obstacle in &s.obstacles {
                     let color = match obstacle.kind {
                         ObstacleKind::Deadly => BLACK,
@@ -111,7 +113,9 @@ impl App {
     }
 
     fn update(&mut self, args: &UpdateArgs) {
-        
+        if let Err(state) = self.engine.update() {
+            self.last_state = Some(state);
+        }
     }
 }
 
@@ -139,6 +143,7 @@ fn main() {
         App {
             gl: gl,
             engine: Engine::from_field(field),
+            last_state: None,
             field_border_y: field[1],
             text_height: text_height,
             tries: 0,
