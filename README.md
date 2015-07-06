@@ -16,6 +16,8 @@ $ cargo run --release
 
 ... provided you have a stable rustc compiler and freetype installed.
 
+**You will find pre-built binaries in the [Releases Section](https://github.com/Byron/catchit-rs/releases)**.
+
 # Credits
 
 The implementation is based on *Robert Eisele's* 
