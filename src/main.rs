@@ -31,7 +31,7 @@ pub struct App {
 
 const WIDTH: u16 = 1024;
 const HEIGHT: u16 = 768;
-const UPDATES_PER_SECOND: u64 = 30;
+const UPDATES_PER_SECOND: u64 = 60;
 const FONT_SIZE: u32 = 22;
 const HUD_SPACE: Scalar = 1.0 / 8.0;
 const NEW_GAME_TEXT: &'static str = "Press SPACE for new game";
@@ -188,7 +188,7 @@ fn main() {
         )
         .exit_on_esc(true)
         .vsync(true)
-        .samples(1)
+        .samples(16)
     );
 
     let mut app = {
