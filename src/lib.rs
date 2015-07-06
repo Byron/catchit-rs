@@ -21,29 +21,31 @@ pub type pt = Scalar;
 /// Represents a shape used for collision detection
 #[derive(Debug, Clone, PartialEq)]
 pub enum CollisionShape {
-    Rectangle,
+    Square,
     Circle
 }
 
-/// The player character
+/// A game object which knows a few things about itself
 #[derive(Debug, Clone, PartialEq)]
-pub struct Hunter {
-    pos: Position,
-    size: pt,
+pub struct Object {
+    pub pos: Position,
+    pub size: pt,
+    pub shape: CollisionShape
 }
 
-/// Represents the prey the hunter tries to get to
 #[derive(Debug, Clone, PartialEq)]
-pub struct Prey {
-    pos: Position,
-    size: pt,
+pub enum ObstacleKind {
+    /// Causes all other obstacles to hide themselves for a while
+    InvisibiltySwitch,
+    /// Kills the player
+    Deadly,
 }
 
-/// Represents a an obstacle the hunter must avoid
+/// An obstacle the hunter can collide with
 #[derive(Debug, Clone, PartialEq)]
 pub struct Obstacle {
-    pos: Position,
-    size: pt,
+    pub kind: ObstacleKind,
+    pub object: Object,
 }
 
 /// It maintains the state of the game and expects to be updated with 
@@ -53,14 +55,12 @@ pub struct Obstacle {
 /// and grow
 #[derive(Debug, Clone, PartialEq)]
 pub struct State {
-    /// Amount of points used as a safety area for the hunter
-    pub safety_margin: pt,
     /// The playing field
     pub field: Extent,
     /// The player's character
-    pub hunter: Hunter,
+    pub hunter: Object,
     /// Hunted the player's character
-    pub prey: Prey,
+    pub prey: Object,
     /// Obstacles the hunter must avoid to prevent game-over
     pub obstacles: Vec<Obstacle>,
     /// score of the current game
@@ -80,10 +80,6 @@ impl Engine {
         Self::clamp_to_field(field, size, &[0.0, 0.0])
     }
 
-    fn rnd_obj_pos_in_safe_zone(field: &Extent, margin: pt, size: pt) -> Position {
-        Self::clamp_to_field(&field, size, &[0.0, 0.0])
-    }
-
     fn clamp_to_field(field: &Extent, size: pt, pos: &Position) -> Position {
         pos.clone()
     }
@@ -93,19 +89,19 @@ impl Engine {
         let margin = (field[0].min(field[1]) * 0.05).max(MIN_FIELD_MARGIN);
         let size = margin - (MIN_FIELD_MARGIN / 6.0);
 
-        let hunter_pos = Self::rnd_obj_pos_in_safe_zone(&field, margin, size);
         let prey_pos = Self::rnd_obj_pos_in_field(&field, size);
 
         State {
-            safety_margin: margin,
             field: field,
-            hunter: Hunter {
-                pos: hunter_pos,
+            hunter: Object {
+                pos: [-size, -size],
                 size: size,
+                shape: CollisionShape::Circle
             },
-            prey: Prey {
+            prey: Object {
                 pos: prey_pos,
                 size: size,
+                shape: CollisionShape::Square
             }, 
             obstacles: Vec::new(),
             score: 0
