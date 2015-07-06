@@ -5,27 +5,38 @@ extern crate opengl_graphics;
 
 extern crate catchit;
 
-use catchit::{Engine, Scalar, Object, CollisionShape, ObstacleKind};
+use catchit::{Engine, Object, CollisionShape, ObstacleKind};
+use catchit::Scalar as CatchitScalar;
 
 use piston::window::WindowSettings;
 use piston::event::{ RenderArgs, UpdateArgs, Events, RenderEvent, UpdateEvent, MouseCursorEvent,
                      EventLoop };
 use glutin_window::GlutinWindow as Window;
 use opengl_graphics::{ GlGraphics, OpenGL };
-use graphics::Context;
+use opengl_graphics::glyph_cache::GlyphCache;
+use graphics::character::CharacterCache;
+use graphics::math::Scalar;
 
 pub struct App {
     gl: GlGraphics,
     engine: Engine,
+    field_border_y: Scalar,
+    max_score: u32,
+    text_height: f64,
+    tries: u32,
+    font_fira_bold: GlyphCache<'static>
 }
 
 const WIDTH: u16 = 1024;
 const HEIGHT: u16 = 768;
 const UPDATES_PER_SECOND: u64 = 60;
+const FONT_SIZE: u32 = 22;
+const HUD_SPACE: Scalar = 1.0 / 8.0;
 
 impl App {
     fn render(&mut self, args: &RenderArgs) {
-        use graphics::{ rectangle, ellipse, clear , Transformed };
+        use graphics::{ rectangle, ellipse, clear , Transformed, Text, Line };
+        use graphics::math::Matrix2d;
 
         const BG:    [f32; 4] = [1.0, 204.0 / 255.0, 0.0, 1.0];
         const BLACK: [f32; 4] = [0.2, 0.2, 0.2, 1.0];
@@ -34,6 +45,12 @@ impl App {
 
         let square = rectangle::square(0.0, 0.0, 1.0);
         let s = self.engine.state();
+        let font_fira_bold = &mut self.font_fira_bold;
+        let text_height = self.text_height;
+        let max_score = self.max_score;
+        let tries = self.tries;
+        let field_border_y = self.field_border_y;
+
 
         self.gl.draw(args.viewport(), |c, gl| {
             let draw_object = |obj: &Object, gl: &mut GlGraphics, color: [f32; 4]| {
@@ -47,6 +64,11 @@ impl App {
             };
             clear(BG, gl);
 
+            let text = Text::colored(BLACK, FONT_SIZE);
+            let text_matrix = |x: Scalar| -> Matrix2d {
+                c.transform.trans(x, HEIGHT as Scalar - text_height / 2.0)
+            };
+
             if let &Some(ref s) = s {
                 for obstacle in &s.obstacles {
                     let color = match obstacle.kind {
@@ -58,7 +80,33 @@ impl App {
 
                 draw_object(&s.prey, gl, RED);
                 draw_object(&s.hunter, gl, RED);
+
+                text.draw(&format!("Score: {}", s.score), font_fira_bold, 
+                                                          &c.draw_state,
+                                                          text_matrix(WIDTH as Scalar 
+                                                                      * HUD_SPACE * 6.0),
+                                                          gl);
             }
+
+            // Draw HUD
+            ////////////
+            let line = Line::new(BLACK, 1.0);
+
+            line.draw([0.0, 0.0, WIDTH as Scalar, 0.0], &c.draw_state, 
+                                                         c.transform.trans(0.0, field_border_y),
+                                                         gl);
+
+            text.draw(&format!("MaxScore: {}", max_score), font_fira_bold, 
+                                                         &c.draw_state,
+                                                         text_matrix(WIDTH as Scalar 
+                                                                     * HUD_SPACE * 1.0),
+                                                         gl);
+
+            text.draw(&format!("Tries: {}", tries),      font_fira_bold, 
+                                                         &c.draw_state,
+                                                         text_matrix(WIDTH as Scalar 
+                                                                     * HUD_SPACE * 3.0),
+                                                         gl);
         });
     }
 
@@ -79,14 +127,26 @@ fn main() {
         .samples(4)
     );
 
-    // Create a new game and run it.
-    let mut app = App {
-        gl: GlGraphics::new(OpenGL::_3_2),
-        engine: Engine::from_field([WIDTH as Scalar, HEIGHT as Scalar]),
+    let mut app = {
+        let gl = GlGraphics::new(OpenGL::_3_2);
+        let mut glyphs = GlyphCache::from_bytes(include_bytes!("../res/FiraMono-Bold.ttf"))
+                                                              .unwrap();
+        let text_height = glyphs.character(FONT_SIZE, 'S').top();
+        let field = [WIDTH as CatchitScalar, HEIGHT as CatchitScalar 
+                                             - (text_height * 2.0)];
+
+        // Create a new game and run it.
+        App {
+            gl: gl,
+            engine: Engine::from_field(field),
+            field_border_y: field[1],
+            text_height: text_height,
+            tries: 0,
+            max_score: 0,
+            font_fira_bold: glyphs,
+        }
     };
 
-    let mut tries = 0u32;
-    let mut max_score = 0u32;
 
     for e in window.events()
                    .max_fps(UPDATES_PER_SECOND)
