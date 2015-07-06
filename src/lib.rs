@@ -10,6 +10,7 @@ pub const MIN_FIELD_MARGIN: Scalar = 30.0;
 pub const FIELD_VELOCITY_COEFF: Scalar = 0.4;
 pub const OBSTACLE_SIZE_COEFF: Scalar = 0.3;
 pub const MIN_OBSTACLE_TO_HUNTER_COEFF: Scalar = 0.1;
+pub const TRANSITION_DURATION: Scalar =  0.5;
 
 pub type Scalar = f64;
 
@@ -107,6 +108,115 @@ pub struct State {
     pub obstacles: Vec<Obstacle>,
     /// score of the current game
     pub score: u32,
+    /// transition between opaque and invisible obstacles
+    pub obstacle_opacity: Transition,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TransitionState {
+    /// Transition is at start, which is the case right after calling `new()`
+    Start,
+    /// We are neither finished, nor at the start
+    InProgress,
+    /// We are finished
+    Finished,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TransitionDirection {
+    FromTo,
+    ToFrom,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Transition {
+    pub v1: Scalar,
+    pub v2: Scalar,
+    pub current: Scalar,
+    /// Time it takes to make transition
+    pub transition_time_s: f64,
+    pub direction: TransitionDirection,
+}
+
+
+
+impl Transition {
+    fn new(from: Scalar, to: Scalar, transition_time_s: f64) -> Transition {
+        Transition {
+            v1: from,
+            v2: to,
+            current: from,
+            transition_time_s: transition_time_s,
+            direction: TransitionDirection::FromTo
+        }
+    }
+
+    fn from(&self) -> Scalar {
+        match self.direction {
+            TransitionDirection::FromTo => self.v1,
+            TransitionDirection::ToFrom => self.v2,
+        }
+    }
+
+    fn to(&self) -> Scalar {
+        match self.direction {
+            TransitionDirection::FromTo => self.v2,
+            TransitionDirection::ToFrom => self.v1,
+        }
+    }
+
+    fn state(&self) -> TransitionState {
+        let to = self.to();
+        let from = self.from();
+
+        if to > from {
+            if self.current >= to {
+                TransitionState::Finished
+            } else if self.current <= from {
+                TransitionState::Start
+            } else {
+                TransitionState::InProgress
+            }
+        } else {
+            if self.current <= to {
+                TransitionState::Finished
+            } else if self.current >= from {
+                TransitionState::Start
+            } else {
+                TransitionState::InProgress
+            }
+        }
+    }
+
+    /// Move transition towards the finished state
+    /// `dt` is in seconds and signals the passed time since the last advance 
+    /// call.
+    fn advance(&mut self, dt: f64) -> &mut Self {
+        let to = self.to();
+        let from = self.from();
+
+        let delta = to - from;
+        self.current += delta * (dt / self.transition_time_s);
+
+        if to > from {
+            if self.current > to {
+                self.current = to;
+            }
+        } else {
+            if self.current < to {
+                self.current = to;
+            }
+        }
+        self
+    }
+
+    fn reverse(&mut self) -> &mut Self {
+        self.direction = match self.direction {
+            TransitionDirection::FromTo => TransitionDirection::ToFrom,
+            TransitionDirection::ToFrom => TransitionDirection::FromTo,
+        };
+        self
+    }
 }
 
 /// The engine implements the game logic
@@ -163,6 +273,7 @@ impl Engine {
                 shape: CollisionShape::Square
             }, 
             obstacles: Vec::new(),
+            obstacle_opacity: Transition::new(1.0, 0.0, TRANSITION_DURATION),
             score: 0
         }
     }
@@ -172,6 +283,66 @@ impl Engine {
                              * MIN_OBSTACLE_TO_HUNTER_COEFF;
         self.state = Some(state);
     }
+
+
+    fn new_obstacle(rng: &mut rand::XorShiftRng, s: &mut State, min_distance: Scalar) {
+        s.prey.pos = Self::rnd_obj_pos_in_field(&s.field, s.prey.half_size, rng);
+
+        let mut half_size = s.hunter.half_size * OBSTACLE_SIZE_COEFF;
+        let kind = match rng.gen_range(0.0f32, 1.0) {
+            _p if _p > 0.94 => {
+                half_size *= 2.0;
+                ObstacleKind::InvisibiltySwitch
+            },
+            _               => ObstacleKind::Deadly,
+        };
+        let vel: Velocity = [
+            rng.gen_range(-s.field[0] * FIELD_VELOCITY_COEFF,
+                           s.field[0] * FIELD_VELOCITY_COEFF),
+            rng.gen_range(-s.field[1] * FIELD_VELOCITY_COEFF,
+                           s.field[1] * FIELD_VELOCITY_COEFF),
+        ];
+
+        let mut pos = s.hunter.pos;
+        while vec2_len(vec2_sub(pos, s.hunter.pos)) < min_distance {
+            pos = Self::rnd_obj_pos_in_field(&s.field, s.prey.half_size, rng)
+        }
+        s.obstacles.push(Obstacle {
+            kind: kind,
+            object: Object {
+                pos: Self::clamp_to_field(&s.field, half_size, pos),
+                half_size: half_size,
+                shape: CollisionShape::Circle,
+            },
+            velocity: vel,
+        });
+    }
+
+    fn advect_obstacles(s: &mut State, dt: f64) {
+        // Move and collide the obstacles.
+        for obstacle in s.obstacles.iter_mut() {
+
+            let obj = &mut obstacle.object;
+            obj.pos = vec2_add(obj.pos, vec2_scale(obstacle.velocity, dt));
+
+            if obj.left() <= 0.0 {
+                obstacle.velocity[0] = -obstacle.velocity[0];
+            } else if obj.right() >= s.field[0] {
+                obstacle.velocity[0] = -obstacle.velocity[0];
+            }
+            if obj.top() <= 0.0 {
+                obstacle.velocity[1] = -obstacle.velocity[1];
+            } else if obj.bottom() >= s.field[1] {
+                obstacle.velocity[1] = -obstacle.velocity[1];
+            }
+
+            obj.pos = Self::clamp_to_field(&s.field, obj.half_size, 
+                                            obj.pos);
+        }
+    }
+}
+
+impl Engine {
 
     pub fn from_field(field: Extent) -> Engine {
         let mut e = Engine {
@@ -198,65 +369,48 @@ impl Engine {
         if let Some(ref mut s) = self.state {
             if s.hunter.intersects(&s.prey) {
                 s.score += 10;
-                let mut rng = self.rng.borrow_mut();
-                s.prey.pos = Self::rnd_obj_pos_in_field(&s.field, s.prey.half_size, 
-                                                         &mut rng);
-
-                let kind = match rng.gen_range(0.0f32, 1.0) {
-                    _p if _p > 0.90 => ObstacleKind::InvisibiltySwitch,
-                    _ => ObstacleKind::Deadly,
-                };
-                let vel: Velocity = [
-                    rng.gen_range(-s.field[0] * FIELD_VELOCITY_COEFF,
-                                   s.field[0] * FIELD_VELOCITY_COEFF),
-                    rng.gen_range(-s.field[1] * FIELD_VELOCITY_COEFF,
-                                   s.field[1] * FIELD_VELOCITY_COEFF),
-                ];
-
-                let mut pos = s.hunter.pos;
-                while vec2_len(vec2_sub(pos, s.hunter.pos)) < self.min_distance {
-                    pos = Self::rnd_obj_pos_in_field(&s.field, s.prey.half_size, 
-                                                     &mut rng)
-                }
-                let half_size = s.hunter.half_size * OBSTACLE_SIZE_COEFF;
-
-                s.obstacles.push(Obstacle {
-                    kind: kind,
-                    object: Object {
-                        pos: Self::clamp_to_field(&s.field, half_size, pos),
-                        half_size: half_size,
-                        shape: CollisionShape::Circle,
-                    },
-                    velocity: vel,
-                });
+                Self::new_obstacle(&mut self.rng.borrow_mut(), s, self.min_distance);
             }// check hunter-prey intersection
 
-            // Move and collide the obstacles.
-            for obstacle in s.obstacles.iter_mut() {
+            Self::advect_obstacles(s, dt);
 
-                let obj = &mut obstacle.object;
-                obj.pos = vec2_add(obj.pos, vec2_scale(obstacle.velocity, dt));
+            // advance transitions
+            for t in [&mut s.obstacle_opacity].iter_mut() {
+                match t.state() {
+                    TransitionState::Start => {
+                        if t.direction == TransitionDirection::ToFrom {
+                            t.reverse();
+                        }
+                    }
+                    TransitionState::InProgress => {
+                        t.advance(dt);
+                    }
+                    TransitionState::Finished => {
+                        let dir = t.direction.clone();
+                        t.reverse();
 
-                if obj.left() <= 0.0 {
-                    obstacle.velocity[0] = -obstacle.velocity[0];
-                } else if obj.right() >= s.field[0] {
-                    obstacle.velocity[0] = -obstacle.velocity[0];
+                        if dir == TransitionDirection::FromTo {
+                            t.advance(dt);
+                        }
+                    }
                 }
-                if obj.top() <= 0.0 {
-                    obstacle.velocity[1] = -obstacle.velocity[1];
-                } else if obj.bottom() >= s.field[1] {
-                    obstacle.velocity[1] = -obstacle.velocity[1];
-                }
-
-                obj.pos = Self::clamp_to_field(&s.field, obj.half_size, 
-                                                obj.pos);
             }
 
             // If the hunter is hit, the game is over ... 
             for obstacle in &s.obstacles {
                 if obstacle.object.intersects(&s.hunter) {
-                    is_game_over = true;
-                    break;
+                    match obstacle.kind {
+                        ObstacleKind::Deadly => {
+                            is_game_over = true;
+                            break;
+                        },
+                        ObstacleKind::InvisibiltySwitch => {
+                            if s.obstacle_opacity.state() == TransitionState::Start &&
+                               s.obstacle_opacity.direction == TransitionDirection::FromTo {
+                                s.obstacle_opacity.advance(dt);
+                            }
+                        },
+                    }
                 }
             }
         } // end have game state
@@ -277,5 +431,39 @@ impl Engine {
         if let Some(ref mut s) = self.state {
             s.hunter.pos = pos;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn transition() {
+        let mut t = Transition::new(0.0, 1.0, 1.0);
+        assert_eq!(t.state(), TransitionState::Start);
+        assert_eq!(t.from(), 0.0);
+        assert_eq!(t.to(), 1.0);
+
+        assert_eq!(t.advance(0.5).current, 0.5);
+        assert_eq!(t.state(), TransitionState::InProgress);
+        assert_eq!(t.advance(0.5).current, 1.0);
+        assert_eq!(t.state(), TransitionState::Finished);
+
+        t.reverse();
+
+        assert_eq!(t.from(), 1.0);
+        assert_eq!(t.to(), 0.0);  
+        assert_eq!(t.state(), TransitionState::Start);
+        assert_eq!(t.current, 1.0);
+
+
+        assert_eq!(t.advance(0.5).current, 0.5);
+        assert_eq!(t.state(), TransitionState::InProgress);
+        assert_eq!(t.advance(0.5).current, 0.0);
+        assert_eq!(t.state(), TransitionState::Finished);
+
+        t.reverse();
+        assert_eq!(t.state(), TransitionState::Start);
     }
 }

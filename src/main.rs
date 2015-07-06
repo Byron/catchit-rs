@@ -74,9 +74,18 @@ impl App {
             };
 
             if let Some(ref s) = s.as_ref().or(last_state.as_ref()) {
+                let deadly_color = {
+                    let mut c = BLACK;
+                    for i in (0..3) {
+                        c[i] = s.obstacle_opacity.current as f32 * BLACK[i] + 
+                               (1.0 - s.obstacle_opacity.current as f32) * BG[i];
+                    }
+                    c
+                };
+
                 for obstacle in &s.obstacles {
                     let color = match obstacle.kind {
-                        ObstacleKind::Deadly => BLACK,
+                        ObstacleKind::Deadly => deadly_color,
                         ObstacleKind::InvisibiltySwitch => WHITE,
                     };
                     draw_object(&obstacle.object, gl, color);
