@@ -12,6 +12,7 @@ pub const OBSTACLE_SIZE_COEFF: Scalar = 0.3;
 pub const MIN_OBSTACLE_TO_HUNTER_COEFF: Scalar = 0.1;
 pub const TRANSITION_DURATION: Scalar =  0.5;
 pub const HOLD_INVISIBILITY_DURATION: Scalar = 0.5;
+pub const COLLISION_VELOCITY_COEFF: Scalar = 0.5;
 pub const ATTRACTIVE_FORCE_DURATION: Scalar = 5.0;
 pub const ATTRACTIVE_FORCE_COEFF: Scalar = 1.25;
 pub const SPECIAL_OBSTACLE_PROBABILITY: f32 = 0.5;
@@ -26,7 +27,7 @@ pub type Extent = vecmath::Vector2<Scalar>;
 pub type Position = vecmath::Vector2<Scalar>;
 pub type Velocity = vecmath::Vector2<Scalar>;
 
-use vecmath::{vec2_len, vec2_sub, vec2_scale, vec2_add};
+use vecmath::{vec2_len, vec2_sub, vec2_scale, vec2_add, vec2_normalized};
 
 /// Points on screen. Usually they correspond to pixels, but might not on a 
 /// HiDPI display
@@ -102,7 +103,8 @@ pub struct Obstacle {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Hunter {
     pub object: Object,
-    pub force: Scalar
+    pub force: Scalar,
+    pub velocity: Velocity,
 }
 
 /// It maintains the state of the game and expects to be updated with 
@@ -126,6 +128,8 @@ pub struct State {
     pub obstacle_opacity: Transition,
     /// transition between no attracting force and maximum one
     pub attracting_force: Transition,
+    /// Last delta-time during update
+    pub last_dt: f64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -294,7 +298,8 @@ impl Engine {
                     half_size: half_size,
                     shape: CollisionShape::Circle
                 },
-                force: 0.0
+                force: 0.0,
+                velocity: [0.0, 0.0],
             },
             prey: Object {
                 pos: prey_pos,
@@ -305,7 +310,8 @@ impl Engine {
             obstacle_opacity: Transition::new(1.0, 0.0, TRANSITION_DURATION),
             attracting_force: Transition::new(0.0, HUNTER_FORCE * ATTRACTIVE_FORCE_COEFF,
                                               TRANSITION_DURATION),
-            score: 0
+            score: 0,
+            last_dt: 1.0,
         }
     }
 
@@ -321,7 +327,7 @@ impl Engine {
 
         let mut half_size = s.hunter.object.half_size * OBSTACLE_SIZE_COEFF;
         let kind = match rng.gen_range(0.0f32, 1.0) {
-            _p if _p > SPECIAL_OBSTACLE_PROBABILITY => {
+            _p if _p < SPECIAL_OBSTACLE_PROBABILITY => {
                 half_size *= 2.0;
                 if rng.gen_range(0.0f32, 1.0) > 0.5 {
                     ObstacleKind::InvisibiltySwitch
@@ -418,7 +424,9 @@ impl Engine {
     /// is game-over.
     pub fn update(&mut self, dt: f64) -> Result<(), State> {
         let mut is_game_over = false;
+
         if let Some(ref mut s) = self.state {
+            s.last_dt = dt;
             if s.hunter.object.intersects(&s.prey) {
                 s.score += 10;
                 Self::new_obstacle(&mut self.rng.borrow_mut(), s, self.min_distance);
@@ -465,6 +473,13 @@ impl Engine {
                         },
                          ObstacleKind::InvisibiltySwitch
                         |ObstacleKind::AttractiveForceSwitch => {
+                            let new_vel = vec2_scale(
+                                                vec2_normalized(
+                                                        vec2_sub(obstacle.object.pos, 
+                                                                 s.hunter.object.pos)),
+                                                vec2_len(obstacle.velocity)
+                                                         * COLLISION_VELOCITY_COEFF);
+                            obstacle.velocity = vec2_add(new_vel, s.hunter.velocity);
                             let transition = match obstacle.kind {
                                 ObstacleKind::InvisibiltySwitch => &mut s.obstacle_opacity,
                                 ObstacleKind::AttractiveForceSwitch => &mut s.attracting_force,
@@ -495,6 +510,8 @@ impl Engine {
     /// Position will be clamped into the playing field
     pub fn set_hunter_pos(&mut self, pos: Position) {
         if let Some(ref mut s) = self.state {
+            s.hunter.velocity = vec2_scale(vec2_sub(pos, s.hunter.object.pos), 
+                                           1.0 / s.last_dt);
             s.hunter.object.pos = pos;
         }
     }
