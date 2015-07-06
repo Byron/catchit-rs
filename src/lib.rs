@@ -12,8 +12,10 @@ pub const OBSTACLE_SIZE_COEFF: Scalar = 0.3;
 pub const MIN_OBSTACLE_TO_HUNTER_COEFF: Scalar = 0.1;
 pub const TRANSITION_DURATION: Scalar =  0.5;
 pub const HOLD_INVISIBILITY_DURATION: Scalar = 0.5;
-pub const SPECIAL_OBSTACLE_PROBABILITY: f32 = 0.9;
-pub const HUNTER_FORCE: Scalar = 1.0;
+pub const ATTRACTIVE_FORCE_DURATION: Scalar = 5.0;
+pub const ATTRACTIVE_FORCE_COEFF: Scalar = 1.25;
+pub const SPECIAL_OBSTACLE_PROBABILITY: f32 = 0.5;
+pub const HUNTER_FORCE: Scalar = 1.0 * 0.1;
 pub const HUNTER_FORCE_SIZE_COEFF: Scalar = 1.5;
 
 pub type Scalar = f64;
@@ -81,6 +83,8 @@ impl Object {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ObstacleKind {
+    /// Enables a temporary attractive force
+    AttractiveForceSwitch,
     /// Causes all other obstacles to hide themselves for a while
     InvisibiltySwitch,
     /// Kills the player
@@ -120,6 +124,8 @@ pub struct State {
     pub score: u32,
     /// transition between opaque and invisible obstacles
     pub obstacle_opacity: Transition,
+    /// transition between no attracting force and maximum one
+    pub attracting_force: Transition,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -153,7 +159,7 @@ pub struct Transition {
 
 
 impl Transition {
-    fn new(from: Scalar, to: Scalar, transition_time_s: f64) -> Transition {
+    pub fn new(from: Scalar, to: Scalar, transition_time_s: f64) -> Transition {
         Transition {
             v1: from,
             v2: to,
@@ -164,21 +170,21 @@ impl Transition {
         }
     }
 
-    fn from(&self) -> Scalar {
+    pub fn from(&self) -> Scalar {
         match self.direction {
             TransitionDirection::FromTo => self.v1,
             TransitionDirection::ToFrom => self.v2,
         }
     }
 
-    fn to(&self) -> Scalar {
+    pub fn to(&self) -> Scalar {
         match self.direction {
             TransitionDirection::FromTo => self.v2,
             TransitionDirection::ToFrom => self.v1,
         }
     }
 
-    fn state(&self) -> TransitionState {
+    pub fn state(&self) -> TransitionState {
         let to = self.to();
         let from = self.from();
 
@@ -205,7 +211,7 @@ impl Transition {
     /// `dt` is in seconds and signals the passed time since the last advance 
     /// call.
     /// Advances the `state_time` as well
-    fn advance(&mut self, dt: f64) -> &mut Self {
+    pub fn advance(&mut self, dt: f64) -> &mut Self {
         self.state_time += dt;
 
         let to = self.to();
@@ -227,7 +233,7 @@ impl Transition {
     }
 
     /// Reverse direction and reset `state_time` if we are Finished
-    fn reverse(&mut self) -> &mut Self {
+    pub fn reverse(&mut self) -> &mut Self {
         if self.state() == TransitionState::Finished {
             self.state_time = 0.0;
         }
@@ -297,6 +303,8 @@ impl Engine {
             }, 
             obstacles: Vec::new(),
             obstacle_opacity: Transition::new(1.0, 0.0, TRANSITION_DURATION),
+            attracting_force: Transition::new(0.0, HUNTER_FORCE * ATTRACTIVE_FORCE_COEFF,
+                                              TRANSITION_DURATION),
             score: 0
         }
     }
@@ -315,7 +323,11 @@ impl Engine {
         let kind = match rng.gen_range(0.0f32, 1.0) {
             _p if _p > SPECIAL_OBSTACLE_PROBABILITY => {
                 half_size *= 2.0;
-                ObstacleKind::InvisibiltySwitch
+                if rng.gen_range(0.0f32, 1.0) > 0.5 {
+                    ObstacleKind::InvisibiltySwitch
+                } else {
+                    ObstacleKind::AttractiveForceSwitch
+                }
             },
             _               => ObstacleKind::Deadly,
         };
@@ -349,12 +361,13 @@ impl Engine {
 
 
             let repell_velocity = 
-                if s.hunter.force > 0.0 {
+                if s.hunter.force > 0.0 || s.attracting_force.current > 0.0 {
                     let vel = vec2_sub(obj.pos, s.hunter.object.pos);
                     let velocity_scale = vec2_len(vel) / (s.hunter.object.half_size * 2.0 * 4.0);
 
                     if velocity_scale <= 1.0 {
-                        vec2_scale(vel, (1.0 - velocity_scale) * s.hunter.force * 0.1)
+                        vec2_scale(vel, (1.0 - velocity_scale) 
+                                        * (s.hunter.force - s.attracting_force.current))
                     } else {
                         [0.0, 0.0]
                     }
@@ -414,8 +427,10 @@ impl Engine {
             Self::advect_obstacles(s, dt);
 
             // advance transitions
-            {
-                let t = &mut s.obstacle_opacity;
+            for &mut (ref mut t, duration) in 
+                                [(&mut s.obstacle_opacity, HOLD_INVISIBILITY_DURATION),
+                                 (&mut s.attracting_force, ATTRACTIVE_FORCE_DURATION),]
+                                 .iter_mut() {
                 match t.state() {
                     TransitionState::Start => {
                         if t.direction == TransitionDirection::ToFrom {
@@ -428,7 +443,7 @@ impl Engine {
                     TransitionState::Finished => {
                         t.state_time += dt;
 
-                        if t.state_time >= TRANSITION_DURATION + HOLD_INVISIBILITY_DURATION {
+                        if t.state_time >= TRANSITION_DURATION + duration {
                             let dir = t.direction.clone();
                             t.reverse();
 
@@ -441,17 +456,24 @@ impl Engine {
             }
 
             // Handle obstacle hits
-            for obstacle in &s.obstacles {
+            for obstacle in &mut s.obstacles {
                 if obstacle.object.intersects(&s.hunter.object) {
                     match obstacle.kind {
                         ObstacleKind::Deadly => {
                             is_game_over = true;
                             break;
                         },
-                        ObstacleKind::InvisibiltySwitch => {
-                            if s.obstacle_opacity.state() == TransitionState::Start &&
-                               s.obstacle_opacity.direction == TransitionDirection::FromTo {
-                                s.obstacle_opacity.advance(dt);
+                         ObstacleKind::InvisibiltySwitch
+                        |ObstacleKind::AttractiveForceSwitch => {
+                            let transition = match obstacle.kind {
+                                ObstacleKind::InvisibiltySwitch => &mut s.obstacle_opacity,
+                                ObstacleKind::AttractiveForceSwitch => &mut s.attracting_force,
+                                ObstacleKind::Deadly => unreachable!(),
+                            };
+
+                            if transition.state() == TransitionState::Start &&
+                               transition.direction == TransitionDirection::FromTo {
+                                transition.advance(dt);
                             }
                         },
                     }

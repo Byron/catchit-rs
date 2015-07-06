@@ -40,11 +40,13 @@ impl App {
     fn render(&mut self, args: &RenderArgs) {
         use graphics::{ rectangle, ellipse, clear , Transformed, Text, Line };
         use graphics::math::Matrix2d;
+        use graphics::types::Color;
 
-        const BG:    [f32; 4] = [1.0, 204.0 / 255.0, 0.0, 1.0];
-        const BLACK: [f32; 4] = [0.2, 0.2, 0.2, 1.0];
-        const WHITE: [f32; 4] = [0.8, 0.8, 0.8, 1.0];
-        const RED:   [f32; 4] = [204.0 / 255.0, 0.0, 0.0, 1.0];
+        const BG:    Color = [1.0, 204.0 / 255.0, 0.0, 1.0];
+        const BLACK: Color = [0.2, 0.2, 0.2, 1.0];
+        const WHITE: Color = [0.8, 0.8, 0.8, 1.0];
+        const BLUE:  Color = [0.0, 0.0, 0.8, 1.0];
+        const RED:   Color = [204.0 / 255.0, 0.0, 0.0, 1.0];
 
         let square = rectangle::square(0.0, 0.0, 1.0);
         let s = self.engine.state();
@@ -57,7 +59,7 @@ impl App {
         let last_state = &self.last_state;
 
         self.gl.draw(args.viewport(), |c, gl| {
-            let draw_object = |obj: &Object, gl: &mut GlGraphics, color: [f32; 4]| {
+            let draw_object = |obj: &Object, gl: &mut GlGraphics, color: Color| {
                 let transform = c.transform.trans(obj.pos[0] - obj.half_size, 
                                                   obj.pos[1] - obj.half_size)
                                            .scale(obj.half_size * 2.0, obj.half_size * 2.0);
@@ -66,6 +68,15 @@ impl App {
                     CollisionShape::Circle => ellipse(color, square, transform, gl),
                 }
             };
+
+            fn blend_color(c1: Color, c2: Color, blend: CatchitScalar) -> Color {
+                let mut c = c1;
+                for i in (0..3) {
+                    c[i] = blend as f32 * c1[i] + (1.0 - blend as f32) * c2[i];
+                }
+                c
+            }
+
             clear(BG, gl);
 
             let text = Text::colored(BLACK, FONT_SIZE);
@@ -74,25 +85,21 @@ impl App {
             };
 
             if let Some(ref s) = s.as_ref().or(last_state.as_ref()) {
-                let deadly_color = {
-                    let mut c = BLACK;
-                    for i in (0..3) {
-                        c[i] = s.obstacle_opacity.current as f32 * BLACK[i] + 
-                               (1.0 - s.obstacle_opacity.current as f32) * BG[i];
-                    }
-                    c
-                };
+                let deadly_color = blend_color(BLACK, BG, s.obstacle_opacity.current);
+                let hunter_color = blend_color(RED, BLUE, 1.0 - s.attracting_force.current
+                                                                / s.attracting_force.v2);
 
                 for obstacle in &s.obstacles {
                     let color = match obstacle.kind {
                         ObstacleKind::Deadly => deadly_color,
+                        ObstacleKind::AttractiveForceSwitch => BLUE,
                         ObstacleKind::InvisibiltySwitch => WHITE,
                     };
                     draw_object(&obstacle.object, gl, color);
                 }
 
                 draw_object(&s.prey, gl, RED);
-                draw_object(&s.hunter.object, gl, RED);
+                draw_object(&s.hunter.object, gl, hunter_color);
 
                 text.draw(&format!("Score: {}", s.score), font_fira_bold, 
                                                           &c.draw_state,
