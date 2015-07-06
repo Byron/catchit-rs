@@ -32,6 +32,11 @@ pub type Velocity = vecmath::Vector2<Scalar>;
 
 use vecmath::{vec2_len, vec2_sub, vec2_scale, vec2_add, vec2_normalized};
 
+use ObstacleKind::*;
+use CollisionShape::*;
+use TransitionState::*;
+use TransitionDirection::*;
+
 /// Points on screen. Usually they correspond to pixels, but might not on a 
 /// HiDPI display
 pub type Pt = Scalar;
@@ -72,7 +77,7 @@ impl Object {
     /// Returns true if both objects intersect
     pub fn intersects(&self, other: &Object) -> bool {
         match (&self.shape, &other.shape) {
-            (&CollisionShape::Circle, &CollisionShape::Circle) => {
+            (&Circle, &Circle) => {
                 vec2_len(vec2_sub(self.pos, other.pos)) <= self.half_size + other.half_size
             },
             _ => {
@@ -174,22 +179,22 @@ impl Transition {
             v2: to,
             current: from,
             transition_time_s: transition_time_s,
-            direction: TransitionDirection::FromTo,
+            direction: FromTo,
             state_time: 0.0,
         }
     }
 
     pub fn from(&self) -> Scalar {
         match self.direction {
-            TransitionDirection::FromTo => self.v1,
-            TransitionDirection::ToFrom => self.v2,
+            FromTo => self.v1,
+            ToFrom => self.v2,
         }
     }
 
     pub fn to(&self) -> Scalar {
         match self.direction {
-            TransitionDirection::FromTo => self.v2,
-            TransitionDirection::ToFrom => self.v1,
+            FromTo => self.v2,
+            ToFrom => self.v1,
         }
     }
 
@@ -199,25 +204,25 @@ impl Transition {
 
         if to > from {
             if self.current >= to {
-                TransitionState::Finished
+                Finished
             } else if self.current <= from {
-                TransitionState::Start
+                Start
             } else {
-                TransitionState::InProgress
+                InProgress
             }
         } else {
             if self.current <= to {
-                TransitionState::Finished
+                Finished
             } else if self.current >= from {
-                TransitionState::Start
+                Start
             } else {
-                TransitionState::InProgress
+                InProgress
             }
         }
     }
 
     pub fn is_pristine(&self) -> bool {
-        self.state() == TransitionState::Start && self.direction == TransitionDirection::FromTo
+        self.state() == Start && self.direction == FromTo
     }
 
     /// Move transition towards the finished state
@@ -247,12 +252,12 @@ impl Transition {
 
     /// Reverse direction and reset `state_time` if we are Finished
     pub fn reverse(&mut self) -> &mut Self {
-        if self.state() == TransitionState::Finished {
+        if self.state() == Finished {
             self.state_time = 0.0;
         }
         self.direction = match self.direction {
-            TransitionDirection::FromTo => TransitionDirection::ToFrom,
-            TransitionDirection::ToFrom => TransitionDirection::FromTo,
+            FromTo => ToFrom,
+            ToFrom => FromTo,
         };
         self
     }
@@ -305,7 +310,7 @@ impl Engine {
                 object: Object {
                     pos: [-half_size * 2.0, -half_size * 2.0],
                     half_size: half_size,
-                    shape: CollisionShape::Circle
+                    shape: Circle
                 },
                 force: 0.0,
                 velocity: [0.0, 0.0],
@@ -313,7 +318,7 @@ impl Engine {
             prey: Object {
                 pos: prey_pos,
                 half_size: half_size,
-                shape: CollisionShape::Square
+                shape: Square
             }, 
             obstacles: Vec::new(),
             obstacle_opacity: Transition::new(1.0, 0.0, TRANSITION_DURATION),
@@ -340,12 +345,12 @@ impl Engine {
             _p if _p < SPECIAL_OBSTACLE_PROBABILITY => {
                 half_size *= 2.0;
                 if rng.gen_range(0.0f32, 1.0) > 0.5 {
-                    ObstacleKind::InvisibiltySwitch
+                    InvisibiltySwitch
                 } else {
-                    ObstacleKind::AttractiveForceSwitch
+                    AttractiveForceSwitch
                 }
             },
-            _               => ObstacleKind::Deadly,
+            _               => Deadly,
         };
         let vel: Velocity = [
             rng.gen_range(-s.field[0] * FIELD_VELOCITY_COEFF,
@@ -363,7 +368,7 @@ impl Engine {
             object: Object {
                 pos: Self::clamp_to_field(&s.field, half_size, pos),
                 half_size: half_size,
-                shape: CollisionShape::Circle,
+                shape: Circle,
             },
             velocity: vel,
         });
@@ -465,22 +470,22 @@ impl Engine {
                                  (&mut s.attracting_force, ATTRACTIVE_FORCE_DURATION),]
                                  .iter_mut() {
                 match t.state() {
-                    TransitionState::Start => {
-                        if t.direction == TransitionDirection::ToFrom {
+                    Start => {
+                        if t.direction == ToFrom {
                             t.reverse();
                         }
                     }
-                    TransitionState::InProgress => {
+                    InProgress => {
                         t.advance(dt);
                     }
-                    TransitionState::Finished => {
+                    Finished => {
                         t.state_time += dt;
 
                         if t.state_time >= TRANSITION_DURATION + duration {
                             let dir = t.direction.clone();
                             t.reverse();
 
-                            if dir == TransitionDirection::FromTo {
+                            if dir == FromTo {
                                 t.advance(dt);
                             }
                         }
@@ -492,12 +497,12 @@ impl Engine {
             for obstacle in &mut s.obstacles {
                 if obstacle.object.intersects(&s.hunter.object) {
                     match obstacle.kind {
-                        ObstacleKind::Deadly => {
+                        Deadly => {
                             is_game_over = true;
                             break;
                         },
-                         ObstacleKind::InvisibiltySwitch
-                        |ObstacleKind::AttractiveForceSwitch => {
+                         InvisibiltySwitch
+                        |AttractiveForceSwitch => {
                             let new_vel = vec2_scale(
                                                 vec2_normalized(
                                                         vec2_sub(obstacle.object.pos, 
@@ -506,13 +511,13 @@ impl Engine {
                                                          * COLLISION_VELOCITY_COEFF);
                             obstacle.velocity = vec2_add(new_vel, s.hunter.velocity);
                             let transition = match obstacle.kind {
-                                ObstacleKind::InvisibiltySwitch => &mut s.obstacle_opacity,
-                                ObstacleKind::AttractiveForceSwitch => &mut s.attracting_force,
-                                ObstacleKind::Deadly => unreachable!(),
+                                InvisibiltySwitch => &mut s.obstacle_opacity,
+                                AttractiveForceSwitch => &mut s.attracting_force,
+                                Deadly => unreachable!(),
                             };
 
-                            if transition.state() == TransitionState::Start &&
-                               transition.direction == TransitionDirection::FromTo {
+                            if transition.state() == Start &&
+                               transition.direction == FromTo {
                                 transition.advance(dt);
                             }
                         },
@@ -567,39 +572,39 @@ mod tests {
     #[test]
     fn transition() {
         let mut t = Transition::new(0.0, 1.0, 1.0);
-        assert_eq!(t.state(), TransitionState::Start);
+        assert_eq!(t.state(), Start);
         assert_eq!(t.from(), 0.0);
         assert_eq!(t.to(), 1.0);
         assert_eq!(t.state_time, 0.0);
 
         assert_eq!(t.advance(0.5).current, 0.5);
         assert_eq!(t.state_time, 0.5);
-        assert_eq!(t.state(), TransitionState::InProgress);
+        assert_eq!(t.state(), InProgress);
         assert_eq!(t.advance(0.5).current, 1.0);
-        assert_eq!(t.state(), TransitionState::Finished);
+        assert_eq!(t.state(), Finished);
         assert_eq!(t.state_time, 1.0);
         assert_eq!(t.advance(0.5).current, 1.0);
         assert_eq!(t.state_time, 1.5);
-        assert_eq!(t.state(), TransitionState::Finished);
+        assert_eq!(t.state(), Finished);
 
         t.reverse();
         assert_eq!(t.state_time, 0.0);
 
         assert_eq!(t.from(), 1.0);
         assert_eq!(t.to(), 0.0);  
-        assert_eq!(t.state(), TransitionState::Start);
+        assert_eq!(t.state(), Start);
         assert_eq!(t.current, 1.0);
 
 
         assert_eq!(t.advance(0.5).current, 0.5);
         assert_eq!(t.state_time, 0.5);
-        assert_eq!(t.state(), TransitionState::InProgress);
+        assert_eq!(t.state(), InProgress);
         assert_eq!(t.reverse().state_time, 0.5);
         assert_eq!(t.reverse().state_time, 0.5);
         assert_eq!(t.advance(0.5).current, 0.0);
-        assert_eq!(t.state(), TransitionState::Finished);
+        assert_eq!(t.state(), Finished);
 
         t.reverse();
-        assert_eq!(t.state(), TransitionState::Start);
+        assert_eq!(t.state(), Start);
     }
 }
