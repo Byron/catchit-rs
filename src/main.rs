@@ -112,8 +112,12 @@ impl App {
         });
     }
 
-    fn update(&mut self, args: &UpdateArgs) {
+    fn update(&mut self, _args: &UpdateArgs) {
         if let Err(state) = self.engine.update() {
+            if state.score > self.max_score {
+                self.max_score += state.score;
+            }
+            self.tries += 1;
             self.last_state = Some(state);
         }
     }
