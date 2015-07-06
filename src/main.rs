@@ -104,8 +104,14 @@ impl App {
                 text.draw(&format!("Score: {}", s.score), font_fira_bold, 
                                                           &c.draw_state,
                                                           text_matrix(WIDTH as Scalar 
-                                                                      * HUD_SPACE * 6.0),
+                                                                      * HUD_SPACE * 4.5),
                                                           gl);
+
+                text.draw(&format!("Multiplier: {:.2}", s.score_coeff), font_fira_bold, 
+                                                         &c.draw_state,
+                                                         text_matrix(WIDTH as Scalar 
+                                                                     * HUD_SPACE * 6.0),
+                                                         gl);
             }
 
             if game_over {
@@ -141,6 +147,7 @@ impl App {
                                                          text_matrix(WIDTH as Scalar 
                                                                      * HUD_SPACE * 3.0),
                                                          gl);
+            
         });
     }
 

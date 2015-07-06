@@ -15,9 +15,12 @@ pub const HOLD_INVISIBILITY_DURATION: Scalar = 0.5;
 pub const COLLISION_VELOCITY_COEFF: Scalar = 0.5;
 pub const ATTRACTIVE_FORCE_DURATION: Scalar = 5.0;
 pub const ATTRACTIVE_FORCE_COEFF: Scalar = 1.25;
-pub const SPECIAL_OBSTACLE_PROBABILITY: f32 = 0.5;
+pub const SPECIAL_OBSTACLE_PROBABILITY: f32 = 0.1;
 pub const HUNTER_FORCE: Scalar = 1.0 * 0.1;
 pub const HUNTER_FORCE_SIZE_COEFF: Scalar = 1.5;
+pub const SCORE_PER_PREY: u32 = 10;
+pub const SCORE_COEFF_INCREMENT_MULTIPLIER: Scalar = 0.1;
+pub const SPECIAL_OBSTACLE_STATE_SCORE_MULTIPLIER: Scalar = 2.0;
 
 pub type Scalar = f64;
 
@@ -124,6 +127,8 @@ pub struct State {
     pub obstacles: Vec<Obstacle>,
     /// score of the current game
     pub score: u32,
+    /// multiply prey score with the given value
+    pub score_coeff: Scalar,
     /// transition between opaque and invisible obstacles
     pub obstacle_opacity: Transition,
     /// transition between no attracting force and maximum one
@@ -209,6 +214,10 @@ impl Transition {
                 TransitionState::InProgress
             }
         }
+    }
+
+    pub fn is_pristine(&self) -> bool {
+        self.state() == TransitionState::Start && self.direction == TransitionDirection::FromTo
     }
 
     /// Move transition towards the finished state
@@ -311,6 +320,7 @@ impl Engine {
             attracting_force: Transition::new(0.0, HUNTER_FORCE * ATTRACTIVE_FORCE_COEFF,
                                               TRANSITION_DURATION),
             score: 0,
+            score_coeff: 1.0,
             last_dt: 1.0,
         }
     }
@@ -398,6 +408,10 @@ impl Engine {
                                             obj.pos);
         }
     }
+
+    fn pos_out_of_field(field: &Extent, pos: &Position) -> bool {
+        pos[0] < 0.0 || pos[0] > field[0] || pos[1] < 0.0 || pos[1] > field[1] 
+    }
 }
 
 impl Engine {
@@ -426,9 +440,20 @@ impl Engine {
         let mut is_game_over = false;
 
         if let Some(ref mut s) = self.state {
+
             s.last_dt = dt;
+            if !Self::pos_out_of_field(&s.field, &s.hunter.object.pos) {
+                s.score_coeff += SCORE_COEFF_INCREMENT_MULTIPLIER * dt;
+            }
+
             if s.hunter.object.intersects(&s.prey) {
-                s.score += 10;
+                let mut multiplier = s.score_coeff;
+                for transition in &[&s.obstacle_opacity, &s.attracting_force] {
+                    if !transition.is_pristine() {
+                        multiplier *= SPECIAL_OBSTACLE_STATE_SCORE_MULTIPLIER;
+                    }
+                }
+                s.score += (10 as Scalar * multiplier) as u32;
                 Self::new_obstacle(&mut self.rng.borrow_mut(), s, self.min_distance);
             }// check hunter-prey intersection
 
@@ -513,6 +538,10 @@ impl Engine {
             s.hunter.velocity = vec2_scale(vec2_sub(pos, s.hunter.object.pos), 
                                            1.0 / s.last_dt);
             s.hunter.object.pos = pos;
+
+            if Self::pos_out_of_field(&s.field, &pos) {
+                s.score_coeff = 1.0;
+            }
         }
     }
 
