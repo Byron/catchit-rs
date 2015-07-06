@@ -4,7 +4,7 @@ This is a piston implementation of the similarly named [javascript implementatio
 
 It runs in a window and requires freetype to be available on the system.
 
-![Screenhot](https://raw.githubusercontent.com/Byron/catchit-rs/.screenshot.png)
+![Screenhot](https://raw.githubusercontent.com/Byron/catchit-rs/master/.screenshot.png)
 
 # How to Run
 
