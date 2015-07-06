@@ -1,4 +1,4 @@
-use engine::Scalar;
+use types::Scalar;
 
 use self::TransitionState::*;
 use self::TransitionDirection::*;
@@ -127,6 +127,7 @@ impl Transition {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::TransitionState::*;
 
     #[test]
     fn transition() {
