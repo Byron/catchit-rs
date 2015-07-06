@@ -29,10 +29,10 @@ pub struct App {
     font_fira_bold: GlyphCache<'static>
 }
 
-const WIDTH: u16 = 1024;
-const HEIGHT: u16 = 768;
+const WIDTH: u16 = 800;
+const HEIGHT: u16 = 600;
 const UPDATES_PER_SECOND: u64 = 60;
-const FONT_SIZE: u32 = 22;
+const FONT_SIZE: u32 = 20;
 const HUD_SPACE: Scalar = 1.0 / 8.0;
 const NEW_GAME_TEXT: &'static str = "Press SPACE for new game";
 
