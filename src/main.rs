@@ -5,12 +5,13 @@ extern crate opengl_graphics;
 
 extern crate catchit;
 
-use catchit::{Engine, Object, CollisionShape, ObstacleKind, State};
+use catchit::{Engine, Object, CollisionShape, ObstacleKind, State, Extent};
 use catchit::Scalar as CatchitScalar;
 
 use piston::window::WindowSettings;
 use piston::event::{ RenderArgs, UpdateArgs, Events, RenderEvent, UpdateEvent, MouseCursorEvent,
-                     EventLoop };
+                     EventLoop, PressEvent };
+use piston::input::{Button, Key};
 use glutin_window::GlutinWindow as Window;
 use opengl_graphics::{ GlGraphics, OpenGL };
 use opengl_graphics::glyph_cache::GlyphCache;
@@ -33,6 +34,7 @@ const HEIGHT: u16 = 768;
 const UPDATES_PER_SECOND: u64 = 60;
 const FONT_SIZE: u32 = 22;
 const HUD_SPACE: Scalar = 1.0 / 8.0;
+const NEW_GAME_TEXT: &'static str = "Press SPACE for new game";
 
 impl App {
     fn render(&mut self, args: &RenderArgs) {
@@ -90,6 +92,14 @@ impl App {
                                                           gl);
             }
 
+            if last_state.is_some() {
+                let w = text_width(font_fira_bold, NEW_GAME_TEXT) / 2.0;
+                text.draw(NEW_GAME_TEXT, font_fira_bold, &c.draw_state,
+                                          c.transform.trans(WIDTH as Scalar / 2.0 - w,
+                                                           HEIGHT as Scalar / 2.0),
+                                          gl);
+            }
+
             // Draw HUD
             ////////////
             let line = Line::new(BLACK, 1.0);
@@ -98,7 +108,7 @@ impl App {
                                                          c.transform.trans(0.0, field_border_y),
                                                          gl);
 
-            text.draw(&format!("MaxScore: {}", max_score), font_fira_bold, 
+            text.draw(&format!("Best Score: {}", max_score), font_fira_bold, 
                                                          &c.draw_state,
                                                          text_matrix(WIDTH as Scalar 
                                                                      * HUD_SPACE * 1.0),
@@ -112,8 +122,8 @@ impl App {
         });
     }
 
-    fn update(&mut self, _args: &UpdateArgs) {
-        if let Err(state) = self.engine.update() {
+    fn update(&mut self, args: &UpdateArgs) {
+        if let Err(state) = self.engine.update(args.dt) {
             if state.score > self.max_score {
                 self.max_score += state.score;
             }
@@ -121,6 +131,19 @@ impl App {
             self.last_state = Some(state);
         }
     }
+}
+
+fn compute_field(width: u16, height: u16, text_height: Scalar) -> Extent {
+    [width as CatchitScalar, height as CatchitScalar 
+                                    - (text_height * 2.0)]
+}
+
+fn text_width(cache: &mut GlyphCache<'static>, text: &str) -> Scalar {
+    let mut w = 0.0;
+    for c in text.chars() {
+        w += cache.character(FONT_SIZE, c).width();
+    }
+    w
 }
 
 fn main() {
@@ -140,8 +163,7 @@ fn main() {
         let mut glyphs = GlyphCache::from_bytes(include_bytes!("../res/FiraMono-Bold.ttf"))
                                                               .unwrap();
         let text_height = glyphs.character(FONT_SIZE, 'S').top();
-        let field = [WIDTH as CatchitScalar, HEIGHT as CatchitScalar 
-                                             - (text_height * 2.0)];
+        let field = compute_field(WIDTH, HEIGHT, text_height);
 
         // Create a new game and run it.
         App {
@@ -162,6 +184,11 @@ fn main() {
                    .ups(UPDATES_PER_SECOND) {
         if let Some(pos) = e.mouse_cursor_args() {
             app.engine.set_hunter_pos(pos);
+        }
+
+        if let Some(Button::Keyboard(Key::Space)) = e.press_args() {
+            app.last_state = None;
+            app.engine.reset(compute_field(WIDTH, HEIGHT, app.text_height));
         }
 
         if let Some(r) = e.render_args() {
