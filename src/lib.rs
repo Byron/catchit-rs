@@ -11,6 +11,7 @@ pub const FIELD_VELOCITY_COEFF: Scalar = 0.4;
 pub const OBSTACLE_SIZE_COEFF: Scalar = 0.3;
 pub const MIN_OBSTACLE_TO_HUNTER_COEFF: Scalar = 0.1;
 pub const TRANSITION_DURATION: Scalar =  0.5;
+pub const HOLD_INVISIBILITY_DURATION: Scalar = 0.5;
 
 pub type Scalar = f64;
 
@@ -136,6 +137,8 @@ pub struct Transition {
     /// Time it takes to make transition
     pub transition_time_s: f64,
     pub direction: TransitionDirection,
+    /// Keeps timing information, helpful to determine how long a state is held
+    pub state_time: f64,
 }
 
 
@@ -147,7 +150,8 @@ impl Transition {
             v2: to,
             current: from,
             transition_time_s: transition_time_s,
-            direction: TransitionDirection::FromTo
+            direction: TransitionDirection::FromTo,
+            state_time: 0.0,
         }
     }
 
@@ -191,7 +195,10 @@ impl Transition {
     /// Move transition towards the finished state
     /// `dt` is in seconds and signals the passed time since the last advance 
     /// call.
+    /// Advances the `state_time` as well
     fn advance(&mut self, dt: f64) -> &mut Self {
+        self.state_time += dt;
+
         let to = self.to();
         let from = self.from();
 
@@ -210,7 +217,11 @@ impl Transition {
         self
     }
 
+    /// Reverse direction and reset `state_time` if we are Finished
     fn reverse(&mut self) -> &mut Self {
+        if self.state() == TransitionState::Finished {
+            self.state_time = 0.0;
+        }
         self.direction = match self.direction {
             TransitionDirection::FromTo => TransitionDirection::ToFrom,
             TransitionDirection::ToFrom => TransitionDirection::FromTo,
@@ -290,7 +301,7 @@ impl Engine {
 
         let mut half_size = s.hunter.half_size * OBSTACLE_SIZE_COEFF;
         let kind = match rng.gen_range(0.0f32, 1.0) {
-            _p if _p > 0.94 => {
+            _p if _p > 0.5 => {
                 half_size *= 2.0;
                 ObstacleKind::InvisibiltySwitch
             },
@@ -386,17 +397,21 @@ impl Engine {
                         t.advance(dt);
                     }
                     TransitionState::Finished => {
-                        let dir = t.direction.clone();
-                        t.reverse();
+                        t.state_time += dt;
 
-                        if dir == TransitionDirection::FromTo {
-                            t.advance(dt);
+                        if t.state_time >= TRANSITION_DURATION + HOLD_INVISIBILITY_DURATION {
+                            let dir = t.direction.clone();
+                            t.reverse();
+
+                            if dir == TransitionDirection::FromTo {
+                                t.advance(dt);
+                            }
                         }
                     }
                 }
             }
 
-            // If the hunter is hit, the game is over ... 
+            // Handle obstacle hits
             for obstacle in &s.obstacles {
                 if obstacle.object.intersects(&s.hunter) {
                     match obstacle.kind {
@@ -444,13 +459,20 @@ mod tests {
         assert_eq!(t.state(), TransitionState::Start);
         assert_eq!(t.from(), 0.0);
         assert_eq!(t.to(), 1.0);
+        assert_eq!(t.state_time, 0.0);
 
         assert_eq!(t.advance(0.5).current, 0.5);
+        assert_eq!(t.state_time, 0.5);
         assert_eq!(t.state(), TransitionState::InProgress);
         assert_eq!(t.advance(0.5).current, 1.0);
         assert_eq!(t.state(), TransitionState::Finished);
+        assert_eq!(t.state_time, 1.0);
+        assert_eq!(t.advance(0.5).current, 1.0);
+        assert_eq!(t.state_time, 1.5);
+        assert_eq!(t.state(), TransitionState::Finished);
 
         t.reverse();
+        assert_eq!(t.state_time, 0.0);
 
         assert_eq!(t.from(), 1.0);
         assert_eq!(t.to(), 0.0);  
@@ -459,7 +481,10 @@ mod tests {
 
 
         assert_eq!(t.advance(0.5).current, 0.5);
+        assert_eq!(t.state_time, 0.5);
         assert_eq!(t.state(), TransitionState::InProgress);
+        assert_eq!(t.reverse().state_time, 0.5);
+        assert_eq!(t.reverse().state_time, 0.5);
         assert_eq!(t.advance(0.5).current, 0.0);
         assert_eq!(t.state(), TransitionState::Finished);
 
