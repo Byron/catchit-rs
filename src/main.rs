@@ -188,7 +188,6 @@ fn main() {
         )
         .exit_on_esc(true)
         .vsync(true)
-        .samples(16)
     );
 
     let mut app = {
