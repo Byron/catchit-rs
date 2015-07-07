@@ -211,7 +211,8 @@ impl Engine {
         if let Some(ref mut s) = self.state {
 
             s.last_dt = dt;
-            if !Self::pos_out_of_field(&s.field, &s.hunter.object.pos) {
+            if !Self::pos_out_of_field(&s.field, &s.hunter.object.pos) 
+                && vec2_len(s.hunter.velocity) > 10.0 {
                 s.score_coeff += SCORE_COEFF_INCREMENT_MULTIPLIER * dt;
             }
 
@@ -288,6 +289,9 @@ impl Engine {
                     }
                 }
             }
+
+            // hunter velocity only remains once we get a move input
+            s.hunter.velocity = [0.0, 0.0];
         } // end have game state
 
         if is_game_over {
