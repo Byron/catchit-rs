@@ -60,10 +60,14 @@ impl Engine {
         pos
     }
 
+    fn hunter_half_size(field: &Extent) -> Scalar {
+        let margin = (field[0].min(field[1]) * 0.05).max(MIN_FIELD_MARGIN);
+        (margin - (MIN_FIELD_MARGIN / 6.0)) / 2.0
+    }
+
     fn state_from_field(field: Extent) -> State {
         assert!(field[0].min(field[1]) >= 320.0, "Playing field is too small");
-        let margin = (field[0].min(field[1]) * 0.05).max(MIN_FIELD_MARGIN);
-        let half_size = (margin - (MIN_FIELD_MARGIN / 6.0)) / 2.0;
+        let half_size = Self::hunter_half_size(&field);
 
         let mut rng = rand::weak_rng();
         let prey_pos = Self::rnd_obj_pos_in_field(&field, half_size, &mut rng);
@@ -323,11 +327,12 @@ impl Engine {
     pub fn set_hunter_force(&mut self, enabled: bool) {
         if let Some(ref mut s) = self.state {
             if enabled {
-                s.hunter.force += HUNTER_FORCE;
-                s.hunter.object.half_size *= HUNTER_FORCE_SIZE_COEFF;
+                s.hunter.force = HUNTER_FORCE;
+                s.hunter.object.half_size = Self::hunter_half_size(&s.field)
+                                            * HUNTER_FORCE_SIZE_COEFF;
             } else {
-                s.hunter.force -= HUNTER_FORCE;
-                s.hunter.object.half_size *= 1.0 / HUNTER_FORCE_SIZE_COEFF;
+                s.hunter.force = 0.0;
+                s.hunter.object.half_size = Self::hunter_half_size(&s.field);
             }
         }
     }
