@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["tempfile","Create an unnamed temporary file."],["tempfile_in","Create an unnamed temporary file in the specified directory."]]});
