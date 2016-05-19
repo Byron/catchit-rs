@@ -10,7 +10,7 @@ pub type Velocity = vecmath::Vector2<Scalar>;
 
 use transition::Transition;
 
-/// Points on screen. Usually they correspond to pixels, but might not on a 
+/// Points on screen. Usually they correspond to pixels, but might not on a
 /// HiDPI display
 pub type Pt = Scalar;
 
@@ -18,7 +18,7 @@ pub type Pt = Scalar;
 #[derive(Debug, Clone, PartialEq)]
 pub enum CollisionShape {
     Square,
-    Circle
+    Circle,
 }
 
 /// A game object which knows a few things about itself
@@ -26,11 +26,10 @@ pub enum CollisionShape {
 pub struct Object {
     pub pos: Position,
     pub half_size: Pt,
-    pub shape: CollisionShape
+    pub shape: CollisionShape,
 }
 
 impl Object {
-
     pub fn left(&self) -> Scalar {
         self.pos[0] - self.half_size
     }
@@ -52,12 +51,10 @@ impl Object {
         match (&self.shape, &other.shape) {
             (&CollisionShape::Circle, &CollisionShape::Circle) => {
                 vec2_len(vec2_sub(self.pos, other.pos)) <= self.half_size + other.half_size
-            },
+            }
             _ => {
-                   self.left() <= other.right()
-                && self.right() >= other.left()
-                && self.top() <= other.bottom() 
-                && self.bottom() >= other.top()
+                self.left() <= other.right() && self.right() >= other.left() &&
+                self.top() <= other.bottom() && self.bottom() >= other.top()
             }
         }
     }
@@ -78,7 +75,7 @@ pub enum ObstacleKind {
 pub struct Obstacle {
     pub kind: ObstacleKind,
     pub object: Object,
-    pub velocity: Velocity
+    pub velocity: Velocity,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -88,7 +85,7 @@ pub struct Hunter {
     pub velocity: Velocity,
 }
 
-/// It maintains the state of the game and expects to be updated with 
+/// It maintains the state of the game and expects to be updated with
 /// time-delta information to compute the next state.
 ///
 /// Please note that the coordinates used in the playing field start at 0

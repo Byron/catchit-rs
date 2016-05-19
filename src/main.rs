@@ -9,11 +9,11 @@ use catchit::{Engine, Object, CollisionShape, ObstacleKind, State, Extent};
 use catchit::Scalar as CatchitScalar;
 
 use piston::window::WindowSettings;
-use piston::event::{ RenderArgs, UpdateArgs, Events, RenderEvent, UpdateEvent, MouseCursorEvent,
-                     EventLoop, PressEvent, ReleaseEvent };
+use piston::event::{RenderArgs, UpdateArgs, Events, RenderEvent, UpdateEvent, MouseCursorEvent,
+                    EventLoop, PressEvent, ReleaseEvent};
 use piston::input::{Button, Key, MouseButton};
 use glutin_window::GlutinWindow as Window;
-use opengl_graphics::{ GlGraphics, OpenGL };
+use opengl_graphics::{GlGraphics, OpenGL};
 use opengl_graphics::glyph_cache::GlyphCache;
 use graphics::character::CharacterCache;
 use graphics::math::Scalar;
@@ -26,7 +26,7 @@ pub struct App {
     max_score: u32,
     text_height: f64,
     tries: u32,
-    font_fira_bold: GlyphCache<'static>
+    font_fira_bold: GlyphCache<'static>,
 }
 
 const WIDTH: u16 = 800;
@@ -38,15 +38,15 @@ const NEW_GAME_TEXT: &'static str = "Press SPACE for new game";
 
 impl App {
     fn render(&mut self, args: &RenderArgs) {
-        use graphics::{ rectangle, ellipse, clear , Transformed, Text, Line };
+        use graphics::{rectangle, ellipse, clear, Transformed, Text, Line};
         use graphics::math::Matrix2d;
         use graphics::types::Color;
 
-        const BG:    Color = [1.0, 204.0 / 255.0, 0.0, 1.0];
+        const BG: Color = [1.0, 204.0 / 255.0, 0.0, 1.0];
         const BLACK: Color = [0.2, 0.2, 0.2, 1.0];
         const WHITE: Color = [0.8, 0.8, 0.8, 1.0];
-        const BLUE:  Color = [0.0, 0.0, 0.8, 1.0];
-        const RED:   Color = [204.0 / 255.0, 0.0, 0.0, 1.0];
+        const BLUE: Color = [0.0, 0.0, 0.8, 1.0];
+        const RED: Color = [204.0 / 255.0, 0.0, 0.0, 1.0];
 
         let square = rectangle::square(0.0, 0.0, 1.0);
         let s = self.engine.state();
@@ -60,9 +60,9 @@ impl App {
 
         self.gl.draw(args.viewport(), |c, gl| {
             let draw_object = |obj: &Object, gl: &mut GlGraphics, color: Color| {
-                let transform = c.transform.trans(obj.pos[0] - obj.half_size, 
-                                                  obj.pos[1] - obj.half_size)
-                                           .scale(obj.half_size * 2.0, obj.half_size * 2.0);
+                let transform = c.transform
+                    .trans(obj.pos[0] - obj.half_size, obj.pos[1] - obj.half_size)
+                    .scale(obj.half_size * 2.0, obj.half_size * 2.0);
                 match obj.shape {
                     CollisionShape::Square => rectangle(color, square, transform, gl),
                     CollisionShape::Circle => ellipse(color, square, transform, gl),
@@ -86,8 +86,10 @@ impl App {
 
             if let Some(ref s) = s.as_ref().or(last_state.as_ref()) {
                 let deadly_color = blend_color(BLACK, BG, s.obstacle_opacity.current);
-                let hunter_color = blend_color(RED, BLUE, 1.0 - s.attracting_force.current
-                                                                / s.attracting_force.v2);
+                let hunter_color = blend_color(RED,
+                                               BLUE,
+                                               1.0 -
+                                               s.attracting_force.current / s.attracting_force.v2);
 
                 for obstacle in &s.obstacles {
                     let color = match obstacle.kind {
@@ -101,53 +103,56 @@ impl App {
                 draw_object(&s.prey, gl, RED);
                 draw_object(&s.hunter.object, gl, hunter_color);
 
-                text.draw(&format!("Score: {}", s.score), font_fira_bold, 
-                                                          &c.draw_state,
-                                                          text_matrix(WIDTH as Scalar 
-                                                                      * HUD_SPACE * 4.5),
-                                                          gl);
+                text.draw(&format!("Score: {}", s.score),
+                          font_fira_bold,
+                          &c.draw_state,
+                          text_matrix(WIDTH as Scalar * HUD_SPACE * 4.5),
+                          gl);
 
-                text.draw(&format!("Multiplier: {:.2}", s.score_coeff), font_fira_bold, 
-                                                         &c.draw_state,
-                                                         text_matrix(WIDTH as Scalar 
-                                                                     * HUD_SPACE * 6.0),
-                                                         gl);
+                text.draw(&format!("Multiplier: {:.2}", s.score_coeff),
+                          font_fira_bold,
+                          &c.draw_state,
+                          text_matrix(WIDTH as Scalar * HUD_SPACE * 6.0),
+                          gl);
             }
 
             if game_over {
                 let w = text_width(font_fira_bold, NEW_GAME_TEXT) / 2.0;
-                text.draw(NEW_GAME_TEXT, font_fira_bold, &c.draw_state,
-                                          c.transform.trans(WIDTH as Scalar / 2.0 - w,
-                                                           HEIGHT as Scalar / 2.0),
-                                          gl);
-                text.draw("Use LMB for repelling force", font_fira_bold, &c.draw_state,
-                                          c.transform.trans(WIDTH as Scalar / 2.0 - w,
-                                                           HEIGHT as Scalar / 2.0 
-                                                           + text_height 
-                                                           + text_height * 0.4),
-                                          gl);
+                text.draw(NEW_GAME_TEXT,
+                          font_fira_bold,
+                          &c.draw_state,
+                          c.transform.trans(WIDTH as Scalar / 2.0 - w, HEIGHT as Scalar / 2.0),
+                          gl);
+                text.draw("Use LMB for repelling force",
+                          font_fira_bold,
+                          &c.draw_state,
+                          c.transform.trans(WIDTH as Scalar / 2.0 - w,
+                                            HEIGHT as Scalar / 2.0 + text_height +
+                                            text_height * 0.4),
+                          gl);
             }
 
             // Draw HUD
-            ////////////
+            // /////////
             let line = Line::new(BLACK, 1.0);
 
-            line.draw([0.0, 0.0, WIDTH as Scalar, 0.0], &c.draw_state, 
-                                                         c.transform.trans(0.0, field_border_y),
-                                                         gl);
+            line.draw([0.0, 0.0, WIDTH as Scalar, 0.0],
+                      &c.draw_state,
+                      c.transform.trans(0.0, field_border_y),
+                      gl);
 
-            text.draw(&format!("Best Score: {}", max_score), font_fira_bold, 
-                                                         &c.draw_state,
-                                                         text_matrix(WIDTH as Scalar 
-                                                                     * HUD_SPACE * 1.0),
-                                                         gl);
+            text.draw(&format!("Best Score: {}", max_score),
+                      font_fira_bold,
+                      &c.draw_state,
+                      text_matrix(WIDTH as Scalar * HUD_SPACE * 1.0),
+                      gl);
 
-            text.draw(&format!("Tries: {}", tries),      font_fira_bold, 
-                                                         &c.draw_state,
-                                                         text_matrix(WIDTH as Scalar 
-                                                                     * HUD_SPACE * 3.0),
-                                                         gl);
-            
+            text.draw(&format!("Tries: {}", tries),
+                      font_fira_bold,
+                      &c.draw_state,
+                      text_matrix(WIDTH as Scalar * HUD_SPACE * 3.0),
+                      gl);
+
         });
     }
 
@@ -167,8 +172,7 @@ impl App {
 }
 
 fn compute_field(width: u16, height: u16, text_height: Scalar) -> Extent {
-    [width as CatchitScalar, height as CatchitScalar 
-                                    - (text_height * 2.0)]
+    [width as CatchitScalar, height as CatchitScalar - (text_height * 2.0)]
 }
 
 fn text_width(cache: &mut GlyphCache<'static>, text: &str) -> Scalar {
@@ -181,19 +185,14 @@ fn text_width(cache: &mut GlyphCache<'static>, text: &str) -> Scalar {
 
 fn main() {
     // Create an Glutin window.
-    let window = Window::new(
-        WindowSettings::new(
-            "catchit",
-            [WIDTH as u32, HEIGHT as u32]
-        )
+    let window = Window::new(WindowSettings::new("catchit", [WIDTH as u32, HEIGHT as u32])
         .exit_on_esc(true)
-        .vsync(true)
-    );
+        .vsync(true));
 
     let mut app = {
         let gl = GlGraphics::new(OpenGL::_3_2);
         let mut glyphs = GlyphCache::from_bytes(include_bytes!("../res/FiraMono-Bold.ttf"))
-                                                              .unwrap();
+            .unwrap();
         let text_height = glyphs.character(FONT_SIZE, 'S').top();
         let field = compute_field(WIDTH, HEIGHT, text_height);
 
@@ -212,8 +211,8 @@ fn main() {
 
 
     for e in window.events()
-                   .max_fps(UPDATES_PER_SECOND)
-                   .ups(UPDATES_PER_SECOND) {
+        .max_fps(UPDATES_PER_SECOND)
+        .ups(UPDATES_PER_SECOND) {
         if let Some(pos) = e.mouse_cursor_args() {
             app.engine.set_hunter_pos(pos);
         }
@@ -222,11 +221,11 @@ fn main() {
             Some(Button::Keyboard(Key::Space)) if app.game_over() => {
                 app.last_state = None;
                 app.engine.reset(compute_field(WIDTH, HEIGHT, app.text_height))
-            },
+            }
             Some(Button::Mouse(MouseButton::Left)) => {
                 app.engine.set_hunter_force(true);
             }
-            _ => {},
+            _ => {}
         }
 
         if let Some(Button::Mouse(MouseButton::Left)) = e.release_args() {

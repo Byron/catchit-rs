@@ -15,7 +15,7 @@ const MIN_FIELD_MARGIN: Scalar = 30.0;
 const FIELD_VELOCITY_COEFF: Scalar = 0.4;
 const OBSTACLE_SIZE_COEFF: Scalar = 0.3;
 const MIN_OBSTACLE_TO_HUNTER_COEFF: Scalar = 0.1;
-const TRANSITION_DURATION: Scalar =  0.5;
+const TRANSITION_DURATION: Scalar = 0.5;
 const HOLD_INVISIBILITY_DURATION: Scalar = 0.5;
 const COLLISION_VELOCITY_COEFF: Scalar = 0.5;
 const ATTRACTIVE_FORCE_DURATION: Scalar = 5.0;
@@ -37,11 +37,13 @@ pub struct Engine {
 }
 
 impl Engine {
-
-    fn rnd_obj_pos_in_field(field: &Extent, half_size: Pt, 
-                            rng: &mut rand::XorShiftRng) -> Position {
-        Self::clamp_to_field(field, half_size, [rng.gen_range(0.0, field[0]),
-                                                rng.gen_range(0.0, field[1])])
+    fn rnd_obj_pos_in_field(field: &Extent,
+                            half_size: Pt,
+                            rng: &mut rand::XorShiftRng)
+                            -> Position {
+        Self::clamp_to_field(field,
+                             half_size,
+                             [rng.gen_range(0.0, field[0]), rng.gen_range(0.0, field[1])])
     }
 
     fn clamp_to_field(field: &Extent, half_size: Pt, mut pos: Position) -> Position {
@@ -52,10 +54,10 @@ impl Engine {
             pos[0] = field[0] - half_size;
         }
         if pos[1] - half_size < 0.0 {
-            pos[1] = half_size;   
+            pos[1] = half_size;
         }
         if pos[1] + half_size > field[1] {
-            pos[1] = field[1] - half_size;   
+            pos[1] = field[1] - half_size;
         }
         pos
     }
@@ -66,7 +68,8 @@ impl Engine {
     }
 
     fn state_from_field(field: Extent) -> State {
-        assert!(field[0].min(field[1]) >= 320.0, "Playing field is too small");
+        assert!(field[0].min(field[1]) >= 320.0,
+                "Playing field is too small");
         let half_size = Self::hunter_half_size(&field);
 
         let mut rng = rand::weak_rng();
@@ -78,7 +81,7 @@ impl Engine {
                 object: Object {
                     pos: [-half_size * 2.0, -half_size * 2.0],
                     half_size: half_size,
-                    shape: Circle
+                    shape: Circle,
                 },
                 force: 0.0,
                 velocity: [0.0, 0.0],
@@ -86,11 +89,12 @@ impl Engine {
             prey: Object {
                 pos: prey_pos,
                 half_size: half_size,
-                shape: Square
-            }, 
+                shape: Square,
+            },
             obstacles: Vec::new(),
             obstacle_opacity: Transition::new(1.0, 0.0, TRANSITION_DURATION),
-            attracting_force: Transition::new(0.0, HUNTER_FORCE * ATTRACTIVE_FORCE_COEFF,
+            attracting_force: Transition::new(0.0,
+                                              HUNTER_FORCE * ATTRACTIVE_FORCE_COEFF,
                                               TRANSITION_DURATION),
             score: 0,
             score_coeff: 1.0,
@@ -99,8 +103,8 @@ impl Engine {
     }
 
     fn set_state(&mut self, state: State) {
-        self.min_distance = (state.field[0].powi(2) + state.field[1].powi(2)).sqrt()
-                             * MIN_OBSTACLE_TO_HUNTER_COEFF;
+        self.min_distance = (state.field[0].powi(2) + state.field[1].powi(2)).sqrt() *
+                            MIN_OBSTACLE_TO_HUNTER_COEFF;
         self.state = Some(state);
     }
 
@@ -117,15 +121,13 @@ impl Engine {
                 } else {
                     AttractiveForceSwitch
                 }
-            },
-            _               => Deadly,
+            }
+            _ => Deadly,
         };
-        let vel: Velocity = [
-            rng.gen_range(-s.field[0] * FIELD_VELOCITY_COEFF,
-                           s.field[0] * FIELD_VELOCITY_COEFF),
-            rng.gen_range(-s.field[1] * FIELD_VELOCITY_COEFF,
-                           s.field[1] * FIELD_VELOCITY_COEFF),
-        ];
+        let vel: Velocity = [rng.gen_range(-s.field[0] * FIELD_VELOCITY_COEFF,
+                                           s.field[0] * FIELD_VELOCITY_COEFF),
+                             rng.gen_range(-s.field[1] * FIELD_VELOCITY_COEFF,
+                                           s.field[1] * FIELD_VELOCITY_COEFF)];
 
         let mut pos = s.hunter.object.pos;
         while vec2_len(vec2_sub(pos, s.hunter.object.pos)) < min_distance {
@@ -149,22 +151,22 @@ impl Engine {
             let obj = &mut obstacle.object;
 
 
-            let repell_velocity = 
-                if s.hunter.force > 0.0 || s.attracting_force.current > 0.0 {
-                    let vel = vec2_sub(obj.pos, s.hunter.object.pos);
-                    let velocity_scale = vec2_len(vel) / (s.hunter.object.half_size * 2.0 * 4.0);
+            let repell_velocity = if s.hunter.force > 0.0 || s.attracting_force.current > 0.0 {
+                let vel = vec2_sub(obj.pos, s.hunter.object.pos);
+                let velocity_scale = vec2_len(vel) / (s.hunter.object.half_size * 2.0 * 4.0);
 
-                    if velocity_scale <= 1.0 {
-                        vec2_scale(vel, (1.0 - velocity_scale) 
-                                        * (s.hunter.force - s.attracting_force.current))
-                    } else {
-                        [0.0, 0.0]
-                    }
+                if velocity_scale <= 1.0 {
+                    vec2_scale(vel,
+                               (1.0 - velocity_scale) *
+                               (s.hunter.force - s.attracting_force.current))
                 } else {
                     [0.0, 0.0]
-                };
+                }
+            } else {
+                [0.0, 0.0]
+            };
             obstacle.velocity = vec2_add(obstacle.velocity, repell_velocity);
-            obj.pos = vec2_add(obj.pos, vec2_scale(obstacle.velocity , dt));
+            obj.pos = vec2_add(obj.pos, vec2_scale(obstacle.velocity, dt));
 
             if obj.left() <= 0.0 {
                 obstacle.velocity[0] = -obstacle.velocity[0];
@@ -177,18 +179,16 @@ impl Engine {
                 obstacle.velocity[1] = -obstacle.velocity[1];
             }
 
-            obj.pos = Self::clamp_to_field(&s.field, obj.half_size, 
-                                            obj.pos);
+            obj.pos = Self::clamp_to_field(&s.field, obj.half_size, obj.pos);
         }
     }
 
     fn pos_out_of_field(field: &Extent, pos: &Position) -> bool {
-        pos[0] < 0.0 || pos[0] > field[0] || pos[1] < 0.0 || pos[1] > field[1] 
+        pos[0] < 0.0 || pos[0] > field[0] || pos[1] < 0.0 || pos[1] > field[1]
     }
 }
 
 impl Engine {
-
     pub fn from_field(field: Extent) -> Engine {
         let mut e = Engine {
             state: None,
@@ -215,8 +215,8 @@ impl Engine {
         if let Some(ref mut s) = self.state {
 
             s.last_dt = dt;
-            if !Self::pos_out_of_field(&s.field, &s.hunter.object.pos) 
-                && vec2_len(s.hunter.velocity) > 10.0 {
+            if !Self::pos_out_of_field(&s.field, &s.hunter.object.pos) &&
+               vec2_len(s.hunter.velocity) > 10.0 {
                 s.score_coeff += SCORE_COEFF_INCREMENT_MULTIPLIER * dt;
             }
 
@@ -234,10 +234,11 @@ impl Engine {
             Self::advect_obstacles(s, dt);
 
             // advance transitions
-            for &mut (ref mut t, duration) in 
-                                [(&mut s.obstacle_opacity, HOLD_INVISIBILITY_DURATION),
-                                 (&mut s.attracting_force, ATTRACTIVE_FORCE_DURATION),]
-                                 .iter_mut() {
+            for &mut (ref mut t, duration) in [(&mut s.obstacle_opacity,
+                                                HOLD_INVISIBILITY_DURATION),
+                                               (&mut s.attracting_force,
+                                                ATTRACTIVE_FORCE_DURATION)]
+                .iter_mut() {
                 match t.state() {
                     Start => {
                         if t.direction == ToFrom {
@@ -269,15 +270,12 @@ impl Engine {
                         Deadly => {
                             is_game_over = true;
                             break;
-                        },
-                         InvisibiltySwitch
-                        |AttractiveForceSwitch => {
-                            let new_vel = vec2_scale(
-                                                vec2_normalized(
-                                                        vec2_sub(obstacle.object.pos, 
-                                                                 s.hunter.object.pos)),
-                                                vec2_len(obstacle.velocity)
-                                                         * COLLISION_VELOCITY_COEFF);
+                        }
+                        InvisibiltySwitch | AttractiveForceSwitch => {
+                            let new_vel =
+                                vec2_scale(vec2_normalized(vec2_sub(obstacle.object.pos,
+                                                                    s.hunter.object.pos)),
+                                           vec2_len(obstacle.velocity) * COLLISION_VELOCITY_COEFF);
                             obstacle.velocity = vec2_add(new_vel, s.hunter.velocity);
                             let transition = match obstacle.kind {
                                 InvisibiltySwitch => &mut s.obstacle_opacity,
@@ -285,11 +283,10 @@ impl Engine {
                                 Deadly => unreachable!(),
                             };
 
-                            if transition.state() == Start &&
-                               transition.direction == FromTo {
+                            if transition.state() == Start && transition.direction == FromTo {
                                 transition.advance(dt);
                             }
-                        },
+                        }
                     }
                 }
             }
@@ -312,8 +309,7 @@ impl Engine {
     /// Position will be clamped into the playing field
     pub fn set_hunter_pos(&mut self, pos: Position) {
         if let Some(ref mut s) = self.state {
-            s.hunter.velocity = vec2_scale(vec2_sub(pos, s.hunter.object.pos), 
-                                           1.0 / s.last_dt);
+            s.hunter.velocity = vec2_scale(vec2_sub(pos, s.hunter.object.pos), 1.0 / s.last_dt);
             s.hunter.object.pos = pos;
 
             if Self::pos_out_of_field(&s.field, &pos) {
@@ -328,8 +324,8 @@ impl Engine {
         if let Some(ref mut s) = self.state {
             if enabled {
                 s.hunter.force = HUNTER_FORCE;
-                s.hunter.object.half_size = Self::hunter_half_size(&s.field)
-                                            * HUNTER_FORCE_SIZE_COEFF;
+                s.hunter.object.half_size = Self::hunter_half_size(&s.field) *
+                                            HUNTER_FORCE_SIZE_COEFF;
             } else {
                 s.hunter.force = 0.0;
                 s.hunter.object.half_size = Self::hunter_half_size(&s.field);

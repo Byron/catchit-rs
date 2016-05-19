@@ -87,7 +87,7 @@ impl Transition {
     }
 
     /// Move transition towards the finished state
-    /// `dt` is in seconds and signals the passed time since the last advance 
+    /// `dt` is in seconds and signals the passed time since the last advance
     /// call.
     /// Advances the `state_time` as well
     pub fn advance(&mut self, dt: f64) -> &mut Self {
@@ -151,7 +151,7 @@ mod tests {
         assert_eq!(t.state_time, 0.0);
 
         assert_eq!(t.from(), 1.0);
-        assert_eq!(t.to(), 0.0);  
+        assert_eq!(t.to(), 0.0);
         assert_eq!(t.state(), Start);
         assert_eq!(t.current, 1.0);
 
