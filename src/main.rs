@@ -1,20 +1,16 @@
 extern crate piston;
 extern crate graphics;
-extern crate glutin_window;
 extern crate opengl_graphics;
+extern crate piston_window;
 
 extern crate catchit;
 
 use catchit::{Engine, Object, CollisionShape, ObstacleKind, State, Extent};
 use catchit::Scalar as CatchitScalar;
 
-use piston::window::WindowSettings;
-use piston::event::{RenderArgs, UpdateArgs, Events, RenderEvent, UpdateEvent, MouseCursorEvent,
-                    EventLoop, PressEvent, ReleaseEvent};
-use piston::input::{Button, Key, MouseButton};
-use glutin_window::GlutinWindow as Window;
-use opengl_graphics::{GlGraphics, OpenGL};
+use piston_window::*;
 use opengl_graphics::glyph_cache::GlyphCache;
+use opengl_graphics::GlGraphics;
 use graphics::character::CharacterCache;
 use graphics::math::Scalar;
 
@@ -71,7 +67,7 @@ impl App {
 
             fn blend_color(c1: Color, c2: Color, blend: CatchitScalar) -> Color {
                 let mut c = c1;
-                for i in (0..3) {
+                for i in 0..3 {
                     c[i] = blend as f32 * c1[i] + (1.0 - blend as f32) * c2[i];
                 }
                 c
@@ -79,7 +75,7 @@ impl App {
 
             clear(BG, gl);
 
-            let text = Text::colored(BLACK, FONT_SIZE);
+            let text = Text::new_color(BLACK, FONT_SIZE);
             let text_matrix = |x: Scalar| -> Matrix2d {
                 c.transform.trans(x, HEIGHT as Scalar - text_height / 2.0)
             };
@@ -185,12 +181,14 @@ fn text_width(cache: &mut GlyphCache<'static>, text: &str) -> Scalar {
 
 fn main() {
     // Create an Glutin window.
-    let window = Window::new(WindowSettings::new("catchit", [WIDTH as u32, HEIGHT as u32])
+    let mut window: PistonWindow = WindowSettings::new("catchit", (WIDTH as u32, HEIGHT as u32))
         .exit_on_esc(true)
-        .vsync(true));
+        .vsync(true)
+        .build()
+        .unwrap();
 
     let mut app = {
-        let gl = GlGraphics::new(OpenGL::_3_2);
+        let gl = GlGraphics::new(OpenGL::V3_2);
         let mut glyphs = GlyphCache::from_bytes(include_bytes!("../res/FiraMono-Bold.ttf"))
             .unwrap();
         let text_height = glyphs.character(FONT_SIZE, 'S').top();
@@ -210,9 +208,11 @@ fn main() {
     };
 
 
-    for e in window.events()
+    let mut events = window.events()
         .max_fps(UPDATES_PER_SECOND)
-        .ups(UPDATES_PER_SECOND) {
+        .ups(UPDATES_PER_SECOND);
+    
+    while let Some(e) = events.next(&mut window) {
         if let Some(pos) = e.mouse_cursor_args() {
             app.engine.set_hunter_pos(pos);
         }
