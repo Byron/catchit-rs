@@ -11,7 +11,7 @@ pub type Velocity = vecmath::Vector2<Scalar>;
 use transition::Transition;
 
 /// Points on screen. Usually they correspond to pixels, but might not on a
-/// HiDPI display
+/// `HiDPI` display
 pub type Pt = Scalar;
 
 /// Represents a shape used for collision detection

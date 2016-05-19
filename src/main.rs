@@ -211,7 +211,7 @@ fn main() {
     let mut events = window.events()
         .max_fps(UPDATES_PER_SECOND)
         .ups(UPDATES_PER_SECOND);
-    
+
     while let Some(e) = events.next(&mut window) {
         if let Some(pos) = e.mouse_cursor_args() {
             app.engine.set_hunter_pos(pos);

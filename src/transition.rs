@@ -71,14 +71,12 @@ impl Transition {
             } else {
                 InProgress
             }
+        } else if self.current <= to {
+            Finished
+        } else if self.current >= from {
+            Start
         } else {
-            if self.current <= to {
-                Finished
-            } else if self.current >= from {
-                Start
-            } else {
-                InProgress
-            }
+            InProgress
         }
     }
 
@@ -103,10 +101,8 @@ impl Transition {
             if self.current > to {
                 self.current = to;
             }
-        } else {
-            if self.current < to {
-                self.current = to;
-            }
+        } else if self.current < to {
+            self.current = to;
         }
         self
     }

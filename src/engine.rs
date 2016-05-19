@@ -114,7 +114,7 @@ impl Engine {
 
         let mut half_size = s.hunter.object.half_size * OBSTACLE_SIZE_COEFF;
         let kind = match rng.gen_range(0.0f32, 1.0) {
-            _p if _p < SPECIAL_OBSTACLE_PROBABILITY => {
+            p if p < SPECIAL_OBSTACLE_PROBABILITY => {
                 half_size *= 2.0;
                 if rng.gen_range(0.0f32, 1.0) > 0.5 {
                     InvisibiltySwitch
@@ -146,7 +146,7 @@ impl Engine {
 
     fn advect_obstacles(s: &mut State, dt: f64) {
         // Move and collide the obstacles.
-        for obstacle in s.obstacles.iter_mut() {
+        for mut obstacle in &mut s.obstacles {
 
             let obj = &mut obstacle.object;
 
@@ -168,14 +168,11 @@ impl Engine {
             obstacle.velocity = vec2_add(obstacle.velocity, repell_velocity);
             obj.pos = vec2_add(obj.pos, vec2_scale(obstacle.velocity, dt));
 
-            if obj.left() <= 0.0 {
-                obstacle.velocity[0] = -obstacle.velocity[0];
-            } else if obj.right() >= s.field[0] {
+            if obj.left() <= 0.0 || obj.right() >= s.field[0] {
                 obstacle.velocity[0] = -obstacle.velocity[0];
             }
-            if obj.top() <= 0.0 {
-                obstacle.velocity[1] = -obstacle.velocity[1];
-            } else if obj.bottom() >= s.field[1] {
+
+            if obj.top() <= 0.0 || obj.bottom() >= s.field[1] {
                 obstacle.velocity[1] = -obstacle.velocity[1];
             }
 
@@ -234,10 +231,10 @@ impl Engine {
             Self::advect_obstacles(s, dt);
 
             // advance transitions
-            for &mut (ref mut t, duration) in [(&mut s.obstacle_opacity,
-                                                HOLD_INVISIBILITY_DURATION),
-                                               (&mut s.attracting_force,
-                                                ATTRACTIVE_FORCE_DURATION)]
+            for &mut (ref mut t, duration) in &mut [(&mut s.obstacle_opacity,
+                                                     HOLD_INVISIBILITY_DURATION),
+                                                    (&mut s.attracting_force,
+                                                     ATTRACTIVE_FORCE_DURATION)]
                 .iter_mut() {
                 match t.state() {
                     Start => {
